@@ -41,7 +41,7 @@ export function useAuthProfile() {
       email: currentUser.email ?? "",
       full_name: currentUser.user_metadata?.full_name ?? null,
       student_id: null,
-      surf_level: null,
+      surf_level: "初階",
     });
 
     if (insertError) {
@@ -77,7 +77,6 @@ export function useAuthProfile() {
     const initUser = async () => {
       try {
         const supabase = createClient();
-
         const { data, error } = await supabase.auth.getUser();
 
         if (!isMounted) return;

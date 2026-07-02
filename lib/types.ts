@@ -8,6 +8,8 @@ export type Profile = {
   full_name: string | null;
   student_id: string | null;
   surf_level: string | null;
+  requested_surf_level: string | null;
+  requested_surf_level_at: string | null;
   role: Role;
   created_at?: string;
   updated_at?: string;
@@ -16,6 +18,7 @@ export type Profile = {
 export type PublicMemberProfile = {
   id: string;
   full_name: string | null;
+  student_id: string | null;
   surf_level: string | null;
   role: Role;
 };
@@ -48,12 +51,13 @@ export type RentalRegistration = {
   id: string;
   rental_slot_id: string;
   user_id: string;
+  is_paid: boolean;
   created_at: string;
   updated_at: string;
 };
 
 export const profileSelectColumns =
-  "id, email, full_name, student_id, surf_level, role, created_at";
+  "id, email, full_name, student_id, surf_level, requested_surf_level, requested_surf_level_at, role, created_at";
 
 export const roleLabels: Record<Role, string> = {
   pending: "待審核",
@@ -71,7 +75,18 @@ export const roleOptions: Role[] = [
   "admin",
 ];
 
+export const officialMemberRoleOptions: Role[] = [
+  "member",
+  "board_manager",
+  "officer",
+  "admin",
+];
+
 export const surfLevelOptions: SurfLevel[] = ["初階", "中階", "中進階", "進階"];
+
+export const directlySelectableSurfLevels: SurfLevel[] = ["初階", "中階"];
+
+export const reviewRequiredSurfLevels: SurfLevel[] = ["中進階", "進階"];
 
 export const surfLevelDescriptions: Array<{
   value: SurfLevel;
@@ -81,21 +96,23 @@ export const surfLevelDescriptions: Array<{
   {
     value: "初階",
     title: "初階",
-    description: "剛開始接觸衝浪，正在熟悉安全規則、划水、起乘與白浪練習。",
+    description:
+      "初學，還不會穩定斜跑，正在練習起乘、站穩、控制方向與基本安全觀念。",
   },
   {
     value: "中階",
     title: "中階",
-    description: "能穩定起乘，開始練習轉向、看浪與在安全條件下自行下水。",
+    description:
+      "已經可以斜跑，但還不穩定；正在練習判斷浪、選浪、維持速度與基本轉向。",
   },
   {
     value: "中進階",
     title: "中進階",
-    description: "能判斷浪況與路線，具備較好的控板能力，可處理一般外海浪況。",
+    description: "可以控制斜跑方向，具備越浪技巧、衝浪禮儀。",
   },
   {
     value: "進階",
     title: "進階",
-    description: "具備成熟的海上判斷、控板與自救能力，可協助照看同伴與活動安全。",
+    description: "已能穩定掌握浪板控制，有自己的板子，開始練習動作。",
   },
 ];

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import {
-  canManageMemberRoles,
   canManageRentalSlots,
   canViewAnnouncements,
+  canViewMembers,
   canViewRentals,
 } from "@/lib/permissions";
 import { roleLabels } from "@/lib/types";
@@ -45,9 +45,9 @@ export default function Home() {
     },
     {
       href: "/admin/members",
-      title: "社員身分管理",
-      description: "調整社員、板務、幹部與管理員身份。",
-      visible: canManageMemberRoles(profile),
+      title: "社員名單",
+      description: "瀏覽正式成員；幹部與管理員可審核社員與程度申請。",
+      visible: canViewMembers(profile),
     },
   ].filter((link) => link.visible);
 
@@ -65,14 +65,12 @@ export default function Home() {
         <section className="mb-6 border border-slate-200 bg-white p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-700">
-                西灣衝浪社內部系統
-              </p>
+              
               <h1 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
-                首頁 / 儀表板
+                首頁 
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                這裡只顯示目前登入狀態與可用功能入口。實際資料管理已拆到各自頁面。
+                這裡顯示目前登入狀態與可用功能入口。
               </p>
             </div>
 
@@ -97,7 +95,7 @@ export default function Home() {
           <section className="border border-slate-200 bg-white p-5">
             <h2 className="font-semibold">尚未登入</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              請先使用 Google 登入。登入後會自動建立社員資料，預設身份為待審核。
+              請先使用 Google 登入。登入後會自動建立社員資料，預設身分為待審核。
             </p>
           </section>
         ) : (
@@ -111,14 +109,14 @@ export default function Home() {
               </div>
 
               <div className="border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">系統身份</p>
+                <p className="text-sm text-slate-500">系統身分</p>
                 <p className="mt-2 font-medium text-slate-900">
                   {profile ? roleLabels[profile.role] : "讀取中"}
                 </p>
               </div>
 
               <div className="border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">衝浪程度</p>
+                <p className="text-sm text-slate-500">已核准衝浪程度</p>
                 <p className="mt-2 font-medium text-slate-900">
                   <SurfLevelBadge level={profile?.surf_level} />
                 </p>
@@ -129,7 +127,7 @@ export default function Home() {
               <section className="mb-6 border border-amber-200 bg-amber-50 p-5">
                 <h2 className="font-semibold text-amber-950">待審核中</h2>
                 <p className="mt-2 text-sm leading-6 text-amber-900">
-                  你目前只能登入與填寫基本資料。完成資料後請等待幹部或管理員調整身份。
+                  你目前只能登入與填寫基本資料。完成資料後請等待幹部或管理員審核。
                 </p>
                 <Link
                   href="/profile"

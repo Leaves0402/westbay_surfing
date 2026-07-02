@@ -1,8 +1,14 @@
 import type { Profile, Role, SurfLevel } from "@/lib/types";
 
-const memberRoles: Role[] = ["member", "board_manager", "officer", "admin"];
-const rentalManagerRoles: Role[] = ["board_manager", "officer", "admin"];
-const officerRoles: Role[] = ["officer", "admin"];
+type RoleInput = Role | Pick<Profile, "role"> | null | undefined;
+
+const roleRanks: Record<Role, number> = {
+  pending: 0,
+  member: 1,
+  board_manager: 2,
+  officer: 3,
+  admin: 4,
+};
 
 const surfLevelRanks: Record<SurfLevel, number> = {
   初階: 1,
@@ -11,32 +17,59 @@ const surfLevelRanks: Record<SurfLevel, number> = {
   進階: 4,
 };
 
-function hasRole(role: Role | null | undefined, allowedRoles: Role[]) {
-  return Boolean(role && allowedRoles.includes(role));
+function resolveRole(input: RoleInput) {
+  if (!input) return null;
+  return typeof input === "string" ? input : input.role;
 }
 
-export function canUseMemberFeatures(profile: Pick<Profile, "role"> | null) {
-  return hasRole(profile?.role, memberRoles);
+function hasAtLeastRole(input: RoleInput, minimumRole: Role) {
+  const role = resolveRole(input);
+  if (!role) return false;
+  return roleRanks[role] >= roleRanks[minimumRole];
 }
 
-export function canViewAnnouncements(profile: Pick<Profile, "role"> | null) {
-  return canUseMemberFeatures(profile);
+export function canUseMemberFeatures(input: RoleInput) {
+  return hasAtLeastRole(input, "member");
 }
 
-export function canManageAnnouncements(profile: Pick<Profile, "role"> | null) {
-  return hasRole(profile?.role, officerRoles);
+export function canViewAnnouncements(input: RoleInput) {
+  return canUseMemberFeatures(input);
 }
 
-export function canViewRentals(profile: Pick<Profile, "role"> | null) {
-  return canUseMemberFeatures(profile);
+export function canManageAnnouncements(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
 }
 
-export function canManageRentalSlots(profile: Pick<Profile, "role"> | null) {
-  return hasRole(profile?.role, rentalManagerRoles);
+export function canViewRentals(input: RoleInput) {
+  return canUseMemberFeatures(input);
 }
 
-export function canManageMemberRoles(profile: Pick<Profile, "role"> | null) {
-  return hasRole(profile?.role, officerRoles);
+export function canManageRentalSlots(input: RoleInput) {
+  return hasAtLeastRole(input, "board_manager");
+}
+
+export function canManageRentalPayments(input: RoleInput) {
+  return hasAtLeastRole(input, "board_manager");
+}
+
+export function canViewMembers(input: RoleInput) {
+  return canUseMemberFeatures(input);
+}
+
+export function canManageMembers(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
+export function canManageMemberRoles(input: RoleInput) {
+  return canManageMembers(input);
+}
+
+export function canReviewPendingMembers(input: RoleInput) {
+  return canManageMembers(input);
+}
+
+export function canReviewSurfLevelRequests(input: RoleInput) {
+  return canManageMembers(input);
 }
 
 export function getSurfLevelRank(level: string | null | undefined) {
@@ -50,4 +83,15 @@ export function userMeetsSurfLevel(
 ) {
   if (!minSurfLevel) return true;
   return getSurfLevelRank(profile?.surf_level) >= getSurfLevelRank(minSurfLevel);
+}
+
+export function compareRolesDescending(a: Role, b: Role) {
+  return roleRanks[b] - roleRanks[a];
+}
+
+export function compareSurfLevelsDescending(
+  a: string | null | undefined,
+  b: string | null | undefined
+) {
+  return getSurfLevelRank(b) - getSurfLevelRank(a);
 }

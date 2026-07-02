@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navbar } from "@/components/Navbar";
-import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import {
+  SurfLevelBadge,
+  surfLevelBorderClasses,
+} from "@/components/SurfLevelBadge";
+import {
+  canManageRentalPayments,
   canManageRentalSlots,
   canViewRentals,
   userMeetsSurfLevel,
@@ -12,11 +16,20 @@ import { createClient } from "@/lib/supabase/client";
 import {
   roleLabels,
   surfLevelDescriptions,
+  type Profile,
   type PublicMemberProfile,
   type RentalRegistration,
   type RentalSlot,
+  type SurfLevel,
 } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
+
+const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
+
+type ResponsibleProfile = Pick<
+  Profile,
+  "id" | "email" | "full_name" | "student_id" | "surf_level" | "role"
+>;
 
 function getTodayDate() {
   const now = new Date();
@@ -24,8 +37,19 @@ function getTodayDate() {
   return now.toISOString().slice(0, 10);
 }
 
+function parseLocalDate(dateString: string) {
+  return new Date(`${dateString}T00:00:00`);
+}
+
+function toDateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatDate(dateString: string) {
-  return new Date(`${dateString}T00:00:00`).toLocaleDateString("zh-TW", {
+  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -33,8 +57,54 @@ function formatDate(dateString: string) {
   });
 }
 
+function formatMonth(date: Date) {
+  return date.toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "long",
+  });
+}
+
 function formatTime(timeString: string) {
   return timeString.slice(0, 5);
+}
+
+function getCalendarCells(monthCursor: Date) {
+  const year = monthCursor.getFullYear();
+  const month = monthCursor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const firstWeekday = (firstDay.getDay() + 6) % 7;
+  const startDate = new Date(year, month, 1 - firstWeekday);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+
+    return {
+      date,
+      dateString: toDateString(date),
+      isCurrentMonth: date.getMonth() === month,
+    };
+  });
+}
+
+function getSlotBorderClass(slot: RentalSlot) {
+  if (!slot.min_surf_level) return "border-slate-300";
+  return (
+    surfLevelBorderClasses[slot.min_surf_level as SurfLevel] ??
+    "border-slate-300"
+  );
+}
+
+function formatResponsiblePerson(
+  person: ResponsibleProfile | PublicMemberProfile | null,
+  emptyText = "未指定負責人"
+) {
+  if (!person) return emptyText;
+  const name =
+    person.full_name ||
+    ("email" in person ? person.email : null) ||
+    "未填姓名";
+  return `${roleLabels[person.role]}（${name}）`;
 }
 
 export default function RentalsPage() {
@@ -55,6 +125,11 @@ export default function RentalsPage() {
   const [memberProfiles, setMemberProfiles] = useState<PublicMemberProfile[]>(
     []
   );
+  const [staffProfiles, setStaffProfiles] = useState<ResponsibleProfile[]>([]);
+  const [monthCursor, setMonthCursor] = useState(() =>
+    parseLocalDate(getTodayDate())
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [isLoadingRentals, setIsLoadingRentals] = useState(false);
   const [isCreatingRentalSlot, setIsCreatingRentalSlot] = useState(false);
   const [updatingRentalSlotId, setUpdatingRentalSlotId] = useState<
@@ -66,6 +141,8 @@ export default function RentalsPage() {
   const [savingRegistrationSlotId, setSavingRegistrationSlotId] = useState<
     string | null
   >(null);
+  const [updatingPaymentRegistrationId, setUpdatingPaymentRegistrationId] =
+    useState<string | null>(null);
 
   const [newSlotDate, setNewSlotDate] = useState(getTodayDate());
   const [newSlotStartTime, setNewSlotStartTime] = useState("15:00");
@@ -76,19 +153,17 @@ export default function RentalsPage() {
   const [newSlotNote, setNewSlotNote] = useState("");
 
   const canView = canViewRentals(profile);
-  const canManage = canManageRentalSlots(profile);
+  const canManageSlots = canManageRentalSlots(profile);
+  const canManagePayments = canManageRentalPayments(profile);
 
-  const staffProfiles = useMemo(
-    () =>
-      memberProfiles.filter((member) =>
-        ["board_manager", "officer", "admin"].includes(member.role)
-      ),
-    [memberProfiles]
+  const calendarCells = useMemo(
+    () => getCalendarCells(monthCursor),
+    [monthCursor]
   );
 
-  const slotDates = useMemo(
-    () => Array.from(new Set(rentalSlots.map((slot) => slot.rental_date))).sort(),
-    [rentalSlots]
+  const selectedSlot = useMemo(
+    () => rentalSlots.find((slot) => slot.id === selectedSlotId) ?? null,
+    [rentalSlots, selectedSlotId]
   );
 
   const getPublicProfileById = useCallback(
@@ -97,6 +172,17 @@ export default function RentalsPage() {
       return memberProfiles.find((member) => member.id === profileId) ?? null;
     },
     [memberProfiles]
+  );
+
+  const getResponsibleProfileById = useCallback(
+    (profileId: string | null) => {
+      if (!profileId) return null;
+      return (
+        staffProfiles.find((staff) => staff.id === profileId) ??
+        getPublicProfileById(profileId)
+      );
+    },
+    [getPublicProfileById, staffProfiles]
   );
 
   const getSlotRegistrations = useCallback(
@@ -137,11 +223,11 @@ export default function RentalsPage() {
         .order("start_time", { ascending: true }),
       supabase
         .from("rental_registrations")
-        .select("id, rental_slot_id, user_id, created_at, updated_at")
+        .select("id, rental_slot_id, user_id, is_paid, created_at, updated_at")
         .order("created_at", { ascending: true }),
       supabase
         .from("public_member_profiles")
-        .select("id, full_name, surf_level, role"),
+        .select("id, full_name, student_id, surf_level, role"),
     ]);
 
     setIsLoadingRentals(false);
@@ -166,7 +252,25 @@ export default function RentalsPage() {
       (registrationsResult.data ?? []) as RentalRegistration[]
     );
     setMemberProfiles((membersResult.data ?? []) as PublicMemberProfile[]);
-  }, [setStatusMessage]);
+
+    if (canManageSlots) {
+      const staffResult = await supabase
+        .from("profiles")
+        .select("id, email, full_name, student_id, surf_level, role")
+        .in("role", ["board_manager", "officer", "admin"])
+        .order("role", { ascending: true })
+        .order("full_name", { ascending: true });
+
+      if (staffResult.error) {
+        setStatusMessage(`讀取負責人名單失敗：${staffResult.error.message}`);
+        return;
+      }
+
+      setStaffProfiles((staffResult.data ?? []) as ResponsibleProfile[]);
+    } else {
+      setStaffProfiles([]);
+    }
+  }, [canManageSlots, setStatusMessage]);
 
   useEffect(() => {
     if (!canView) return;
@@ -177,13 +281,19 @@ export default function RentalsPage() {
     return getSlotRegistrations(slot.id).length >= slot.capacity;
   };
 
+  const moveMonth = (offset: number) => {
+    setMonthCursor(
+      (current) => new Date(current.getFullYear(), current.getMonth() + offset, 1)
+    );
+  };
+
   const handleCreateRentalSlot = async () => {
     if (!user) {
       setStatusMessage("請先登入後再新增租板時段。");
       return;
     }
 
-    if (!canManage) {
+    if (!canManageSlots) {
       setStatusMessage("只有板務、幹部與管理員可以新增租板時段。");
       return;
     }
@@ -239,12 +349,13 @@ export default function RentalsPage() {
     setNewSlotBoardManagerId("");
     setNewSlotMinSurfLevel("");
     setNewSlotNote("");
+    setMonthCursor(parseLocalDate(newSlotDate));
     setStatusMessage("租板時段已新增。");
     await loadRentalData();
   };
 
   const handleToggleRentalSlot = async (slot: RentalSlot) => {
-    if (!canManage) {
+    if (!canManageSlots) {
       setStatusMessage("只有板務、幹部與管理員可以開關租板時段。");
       return;
     }
@@ -273,7 +384,7 @@ export default function RentalsPage() {
   };
 
   const handleDeleteRentalSlot = async (slotId: string) => {
-    if (!canManage) {
+    if (!canManageSlots) {
       setStatusMessage("只有板務、幹部與管理員可以刪除租板時段。");
       return;
     }
@@ -292,6 +403,10 @@ export default function RentalsPage() {
     if (error) {
       setStatusMessage(`刪除租板時段失敗：${error.message}`);
       return;
+    }
+
+    if (selectedSlotId === slotId) {
+      setSelectedSlotId(null);
     }
 
     setStatusMessage("租板時段已刪除。");
@@ -331,6 +446,7 @@ export default function RentalsPage() {
     const { error } = await supabase.from("rental_registrations").insert({
       rental_slot_id: slot.id,
       user_id: user.id,
+      is_paid: false,
     });
 
     setSavingRegistrationSlotId(null);
@@ -340,6 +456,7 @@ export default function RentalsPage() {
       return;
     }
 
+    setSelectedSlotId(slot.id);
     setStatusMessage("已登記租板。");
     await loadRentalData();
   };
@@ -352,7 +469,7 @@ export default function RentalsPage() {
       return;
     }
 
-    if (registration.user_id !== user.id && !canManage) {
+    if (registration.user_id !== user.id && !canManageSlots) {
       setStatusMessage("只能取消自己的登記。");
       return;
     }
@@ -377,6 +494,42 @@ export default function RentalsPage() {
     await loadRentalData();
   };
 
+  const handleTogglePayment = async (
+    registration: RentalRegistration,
+    isPaid: boolean
+  ) => {
+    if (!canManagePayments) {
+      setStatusMessage("只有板務、幹部與管理員可以更新繳費狀態。");
+      return;
+    }
+
+    setUpdatingPaymentRegistrationId(registration.id);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("rental_registrations")
+      .update({
+        is_paid: isPaid,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", registration.id);
+
+    setUpdatingPaymentRegistrationId(null);
+
+    if (error) {
+      setStatusMessage(`更新繳費狀態失敗：${error.message}`);
+      return;
+    }
+
+    setRentalRegistrations((current) =>
+      current.map((item) =>
+        item.id === registration.id ? { ...item, is_paid: isPaid } : item
+      )
+    );
+    setStatusMessage("繳費狀態已更新。");
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <Navbar
@@ -387,11 +540,11 @@ export default function RentalsPage() {
         onLogout={handleLogout}
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <section className="mb-6 border border-slate-200 bg-white p-5">
           <h1 className="text-2xl font-semibold tracking-normal">租板</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            社員以上可以查看與登記；板務、幹部與管理員可以新增、開關、刪除時段並查看登記名單。
+            社員以上可以查看與登記；板務、幹部與管理員可以新增、開關、刪除時段並管理繳費狀態。
           </p>
         </section>
 
@@ -415,7 +568,7 @@ export default function RentalsPage() {
           </section>
         ) : (
           <>
-            {canManage && (
+            {canManageSlots && (
               <section className="mb-6 border border-slate-200 bg-white p-5">
                 <h2 className="font-semibold">新增租板時段</h2>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -467,7 +620,7 @@ export default function RentalsPage() {
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm font-medium">負責板務</span>
+                    <span className="text-sm font-medium">負責人</span>
                     <select
                       value={newSlotBoardManagerId}
                       onChange={(event) =>
@@ -475,11 +628,10 @@ export default function RentalsPage() {
                       }
                       className="border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
                     >
-                      <option value="">未指定</option>
+                      <option value="">未指定負責人</option>
                       {staffProfiles.map((staff) => (
                         <option key={staff.id} value={staff.id}>
-                          {staff.full_name || "未填姓名"}（
-                          {roleLabels[staff.role]}）
+                          {formatResponsiblePerson(staff, "未填姓名")}
                         </option>
                       ))}
                     </select>
@@ -525,256 +677,184 @@ export default function RentalsPage() {
               </section>
             )}
 
-            <section className="grid gap-4">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="font-semibold">租板時段</h2>
-                <button
-                  type="button"
-                  onClick={() => void loadRentalData()}
-                  className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
-                >
-                  重新整理
-                </button>
+            <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+              <div className="border border-slate-200 bg-white p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold">租板日曆</h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      點擊日期格中的時段查看詳細資料。
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => moveMonth(-1)}
+                      className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      上個月
+                    </button>
+                    <p className="min-w-28 text-center text-sm font-semibold">
+                      {formatMonth(monthCursor)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => moveMonth(1)}
+                      className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      下個月
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void loadRentalData()}
+                      className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      重新整理
+                    </button>
+                  </div>
+                </div>
+
+                {isLoadingRentals ? (
+                  <p className="border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+                    正在讀取租板資料...
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-7 border-l border-t border-slate-200">
+                    {weekdayLabels.map((weekday) => (
+                      <div
+                        key={weekday}
+                        className="border-b border-r border-slate-200 bg-slate-100 px-2 py-2 text-center text-xs font-semibold text-slate-700"
+                      >
+                        {weekday}
+                      </div>
+                    ))}
+
+                    {calendarCells.map((cell) => {
+                      const slotsForDay = rentalSlots.filter(
+                        (slot) => slot.rental_date === cell.dateString
+                      );
+
+                      return (
+                        <div
+                          key={cell.dateString}
+                          className={`min-h-36 border-b border-r border-slate-200 p-2 ${
+                            cell.isCurrentMonth ? "bg-white" : "bg-slate-50"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (slotsForDay[0]) {
+                                setSelectedSlotId(slotsForDay[0].id);
+                              }
+                            }}
+                            className={`mb-2 block text-left text-sm font-semibold text-black ${
+                              cell.isCurrentMonth ? "" : "opacity-45"
+                            }`}
+                          >
+                            {cell.date.getDate()}
+                          </button>
+
+                          <div className="grid gap-2">
+                            {slotsForDay.map((slot) => {
+                              const registrations = getSlotRegistrations(slot.id);
+                              const responsiblePerson = getResponsibleProfileById(
+                                slot.board_manager_id
+                              );
+                              const meetsLevel = userMeetsSurfLevel(
+                                profile,
+                                slot.min_surf_level
+                              );
+                              const isAvailableForUser =
+                                slot.is_open && meetsLevel;
+                              const borderClass = getSlotBorderClass(slot);
+                              const isSelected = selectedSlotId === slot.id;
+
+                              return (
+                                <button
+                                  type="button"
+                                  key={slot.id}
+                                  onClick={() => setSelectedSlotId(slot.id)}
+                                  className={`border-2 ${borderClass} ${
+                                    isAvailableForUser
+                                      ? "bg-white"
+                                      : "bg-slate-100"
+                                  } p-2 text-left text-xs text-black hover:bg-blue-50 ${
+                                    isSelected
+                                      ? "outline outline-2 outline-blue-500"
+                                      : ""
+                                  }`}
+                                >
+                                  <p className="font-semibold">
+                                    {formatTime(slot.start_time)}-
+                                    {formatTime(slot.end_time)}
+                                  </p>
+                                  <p className="mt-1">
+                                    {registrations.length}/{slot.capacity}
+                                  </p>
+                                  <p className="mt-1">
+                                    {slot.min_surf_level
+                                      ? `${slot.min_surf_level}以上`
+                                      : "不限制程度"}
+                                  </p>
+                                  <p
+                                    className={`mt-1 ${
+                                      responsiblePerson
+                                        ? "text-black"
+                                        : "text-slate-500"
+                                    }`}
+                                  >
+                                    {formatResponsiblePerson(responsiblePerson)}
+                                  </p>
+                                  {!slot.is_open && (
+                                    <p className="mt-1 text-slate-600">未開放</p>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {isLoadingRentals ? (
-                <p className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
-                  正在讀取租板資料...
-                </p>
-              ) : rentalSlots.length === 0 ? (
-                <p className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
-                  目前沒有租板時段。
-                </p>
-              ) : (
-                slotDates.map((date) => (
-                  <section key={date} className="border border-slate-200 bg-white p-5">
-                    <h3 className="mb-4 font-semibold">{formatDate(date)}</h3>
-
-                    <div className="grid gap-4">
-                      {rentalSlots
-                        .filter((slot) => slot.rental_date === date)
-                        .map((slot) => {
-                          const registrations = getSlotRegistrations(slot.id);
-                          const boardManager = getPublicProfileById(
-                            slot.board_manager_id
-                          );
-                          const myRegistration = getMyRegistration(slot.id);
-                          const full = isSlotFull(slot);
-                          const meetsLevel = userMeetsSurfLevel(
-                            profile,
-                            slot.min_surf_level
-                          );
-                          const canRegister =
-                            slot.is_open &&
-                            !full &&
-                            !myRegistration &&
-                            meetsLevel;
-
-                          return (
-                            <article
-                              key={slot.id}
-                              className="border border-slate-200 bg-slate-50 p-4"
-                            >
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <h4 className="font-semibold">
-                                      {formatTime(slot.start_time)}-
-                                      {formatTime(slot.end_time)}
-                                    </h4>
-                                    <span
-                                      className={`px-2 py-1 text-xs font-medium ${
-                                        slot.is_open
-                                          ? "bg-green-100 text-green-700"
-                                          : "bg-slate-200 text-slate-600"
-                                      }`}
-                                    >
-                                      {slot.is_open ? "開放中" : "已關閉"}
-                                    </span>
-                                  </div>
-
-                                  <div className="mt-3 grid gap-1 text-sm text-slate-600">
-                                    <p>
-                                      負責板務：
-                                      {boardManager?.full_name || "未指定"}
-                                    </p>
-                                    <p>
-                                      最低程度：
-                                      {slot.min_surf_level ? (
-                                        <span className="inline-flex items-center gap-2">
-                                          <SurfLevelBadge
-                                            level={slot.min_surf_level}
-                                          />
-                                          <span>以上</span>
-                                        </span>
-                                      ) : (
-                                        "不限制"
-                                      )}
-                                    </p>
-                                    <p>
-                                      名額：{registrations.length} /{" "}
-                                      {slot.capacity}
-                                    </p>
-                                  </div>
-
-                                  {slot.note && (
-                                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                                      備註：{slot.note}
-                                    </p>
-                                  )}
-                                </div>
-
-                                {canManage && (
-                                  <div className="flex shrink-0 flex-wrap gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void handleToggleRentalSlot(slot)
-                                      }
-                                      disabled={updatingRentalSlotId === slot.id}
-                                      className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:text-slate-400"
-                                    >
-                                      {updatingRentalSlotId === slot.id
-                                        ? "更新中..."
-                                        : slot.is_open
-                                          ? "關閉"
-                                          : "開放"}
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void handleDeleteRentalSlot(slot.id)
-                                      }
-                                      disabled={deletingRentalSlotId === slot.id}
-                                      className="border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-400"
-                                    >
-                                      {deletingRentalSlotId === slot.id
-                                        ? "刪除中..."
-                                        : "刪除"}
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-
-                              {canManage && (
-                                <div className="mt-4 border border-slate-200 bg-white p-3">
-                                  <h5 className="mb-2 text-sm font-medium">
-                                    登記名單
-                                  </h5>
-
-                                  <div className="grid gap-2">
-                                    {registrations.length === 0 ? (
-                                      <p className="text-sm text-slate-500">
-                                        尚無登記。
-                                      </p>
-                                    ) : (
-                                      registrations.map((registration) => {
-                                        const renter = getPublicProfileById(
-                                          registration.user_id
-                                        );
-
-                                        return (
-                                          <div
-                                            key={registration.id}
-                                            className="flex flex-col gap-2 border border-slate-100 bg-slate-50 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-                                          >
-                                            <div>
-                                              <span className="font-medium">
-                                                {renter?.full_name ||
-                                                  "未填姓名"}
-                                              </span>
-                                              <span className="ml-3">
-                                                <SurfLevelBadge
-                                                  level={
-                                                    renter?.surf_level ?? null
-                                                  }
-                                                />
-                                              </span>
-                                            </div>
-
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                void handleCancelRentalRegistration(
-                                                  registration
-                                                )
-                                              }
-                                              disabled={
-                                                savingRegistrationSlotId ===
-                                                slot.id
-                                              }
-                                              className="w-fit text-sm font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
-                                            >
-                                              取消登記
-                                            </button>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="mt-4">
-                                {myRegistration ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void handleCancelRentalRegistration(
-                                        myRegistration
-                                      )
-                                    }
-                                    disabled={
-                                      savingRegistrationSlotId === slot.id
-                                    }
-                                    className="border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-400"
-                                  >
-                                    {savingRegistrationSlotId === slot.id
-                                      ? "取消中..."
-                                      : "取消我的登記"}
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleRegisterRental(slot)}
-                                    disabled={
-                                      !canRegister ||
-                                      savingRegistrationSlotId === slot.id
-                                    }
-                                    className="bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-                                  >
-                                    {savingRegistrationSlotId === slot.id
-                                      ? "登記中..."
-                                      : "登記租板"}
-                                  </button>
-                                )}
-
-                                {!slot.is_open && (
-                                  <p className="mt-2 text-xs text-slate-500">
-                                    此時段目前未開放登記。
-                                  </p>
-                                )}
-
-                                {slot.is_open && full && (
-                                  <p className="mt-2 text-xs text-slate-500">
-                                    此時段已額滿。
-                                  </p>
-                                )}
-
-                                {slot.is_open && !meetsLevel && (
-                                  <p className="mt-2 text-xs text-slate-500">
-                                    你的衝浪程度尚未符合此時段最低要求。
-                                  </p>
-                                )}
-                              </div>
-                            </article>
-                          );
-                        })}
-                    </div>
+              <div>
+                {selectedSlot ? (
+                  <RentalSlotDetail
+                    slot={selectedSlot}
+                    userId={user.id}
+                    profile={profile}
+                    registrations={getSlotRegistrations(selectedSlot.id)}
+                    boardManager={getResponsibleProfileById(
+                      selectedSlot.board_manager_id
+                    )}
+                    getPublicProfileById={getPublicProfileById}
+                    myRegistration={getMyRegistration(selectedSlot.id)}
+                    isFull={isSlotFull(selectedSlot)}
+                    canManageSlots={canManageSlots}
+                    canManagePayments={canManagePayments}
+                    updatingRentalSlotId={updatingRentalSlotId}
+                    deletingRentalSlotId={deletingRentalSlotId}
+                    savingRegistrationSlotId={savingRegistrationSlotId}
+                    updatingPaymentRegistrationId={updatingPaymentRegistrationId}
+                    onToggleSlot={handleToggleRentalSlot}
+                    onDeleteSlot={handleDeleteRentalSlot}
+                    onRegister={handleRegisterRental}
+                    onCancelRegistration={handleCancelRentalRegistration}
+                    onTogglePayment={handleTogglePayment}
+                  />
+                ) : (
+                  <section className="border border-slate-200 bg-white p-5">
+                    <h2 className="font-semibold">時段詳細資料</h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      請從左側日曆選擇一個租板時段。
+                    </p>
                   </section>
-                ))
-              )}
+                )}
+              </div>
             </section>
           </>
         )}
@@ -786,5 +866,258 @@ export default function RentalsPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function RentalSlotDetail({
+  slot,
+  userId,
+  profile,
+  registrations,
+  boardManager,
+  getPublicProfileById,
+  myRegistration,
+  isFull,
+  canManageSlots,
+  canManagePayments,
+  updatingRentalSlotId,
+  deletingRentalSlotId,
+  savingRegistrationSlotId,
+  updatingPaymentRegistrationId,
+  onToggleSlot,
+  onDeleteSlot,
+  onRegister,
+  onCancelRegistration,
+  onTogglePayment,
+}: {
+  slot: RentalSlot;
+  userId: string;
+  profile: { surf_level: string | null } | null;
+  registrations: RentalRegistration[];
+  boardManager: ResponsibleProfile | PublicMemberProfile | null;
+  getPublicProfileById: (profileId: string | null) => PublicMemberProfile | null;
+  myRegistration: RentalRegistration | null;
+  isFull: boolean;
+  canManageSlots: boolean;
+  canManagePayments: boolean;
+  updatingRentalSlotId: string | null;
+  deletingRentalSlotId: string | null;
+  savingRegistrationSlotId: string | null;
+  updatingPaymentRegistrationId: string | null;
+  onToggleSlot: (slot: RentalSlot) => Promise<void>;
+  onDeleteSlot: (slotId: string) => Promise<void>;
+  onRegister: (slot: RentalSlot) => Promise<void>;
+  onCancelRegistration: (registration: RentalRegistration) => Promise<void>;
+  onTogglePayment: (
+    registration: RentalRegistration,
+    isPaid: boolean
+  ) => Promise<void>;
+}) {
+  const meetsLevel = userMeetsSurfLevel(profile, slot.min_surf_level);
+  const canRegister =
+    slot.is_open && !isFull && !myRegistration && meetsLevel;
+  const registrationRows = Array.from(
+    { length: Math.max(slot.capacity, registrations.length) },
+    (_, index) => registrations[index] ?? null
+  );
+
+  return (
+    <section className="border border-slate-200 bg-white p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">時段詳細資料</h2>
+          <p className="mt-1 text-sm text-slate-600">{formatDate(slot.rental_date)}</p>
+        </div>
+
+        {canManageSlots && (
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void onToggleSlot(slot)}
+              disabled={updatingRentalSlotId === slot.id}
+              className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              {updatingRentalSlotId === slot.id
+                ? "更新中..."
+                : slot.is_open
+                  ? "關閉"
+                  : "開放"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void onDeleteSlot(slot.id)}
+              disabled={deletingRentalSlotId === slot.id}
+              className="border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              {deletingRentalSlotId === slot.id ? "刪除中..." : "刪除"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-slate-500">時間</dt>
+          <dd className="mt-1 font-medium">
+            {formatTime(slot.start_time)}-{formatTime(slot.end_time)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-500">開放狀態</dt>
+          <dd className="mt-1 font-medium">{slot.is_open ? "開放中" : "已關閉"}</dd>
+        </div>
+        <div>
+          <dt className="text-slate-500">負責人</dt>
+          <dd className={boardManager ? "mt-1 font-medium" : "mt-1 text-slate-500"}>
+            {formatResponsiblePerson(boardManager)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-500">最低程度</dt>
+          <dd className="mt-1 font-medium">
+            {slot.min_surf_level ? (
+              <span className="inline-flex items-center gap-2">
+                <SurfLevelBadge level={slot.min_surf_level} />
+                <span>以上</span>
+              </span>
+            ) : (
+              "不限制"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-500">名額</dt>
+          <dd className="mt-1 font-medium">
+            {registrations.length}/{slot.capacity}
+          </dd>
+        </div>
+      </dl>
+
+      {slot.note && (
+        <p className="mt-5 whitespace-pre-wrap border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+          備註：{slot.note}
+        </p>
+      )}
+
+      <div className="mt-5 overflow-x-auto">
+        <h3 className="mb-3 font-semibold">登記名單</h3>
+        <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-200">
+              <th className="py-2 pr-3 font-medium">編號</th>
+              <th className="py-2 pr-3 font-medium">姓名</th>
+              <th className="py-2 pr-3 font-medium">學號</th>
+              <th className="py-2 pr-3 font-medium">衝浪程度</th>
+              <th className="py-2 pr-3 font-medium">繳費</th>
+              <th className="py-2 pr-3 font-medium">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {registrationRows.map((registration, index) => {
+              const renter = registration
+                ? getPublicProfileById(registration.user_id)
+                : null;
+
+              return (
+                <tr
+                  key={registration?.id ?? `empty-${slot.id}-${index}`}
+                  className="border-b border-slate-100"
+                >
+                  <td className="py-3 pr-3">{index + 1}</td>
+                  <td className="py-3 pr-3">
+                    {registration ? renter?.full_name || "未填姓名" : "空位"}
+                  </td>
+                  <td className="py-3 pr-3">
+                    {registration ? renter?.student_id || "未填學號" : "-"}
+                  </td>
+                  <td className="py-3 pr-3">
+                    {registration ? (
+                      <SurfLevelBadge level={renter?.surf_level ?? null} />
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="py-3 pr-3">
+                    {registration ? (
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={registration.is_paid}
+                          disabled={
+                            !canManagePayments ||
+                            updatingPaymentRegistrationId === registration.id
+                          }
+                          onChange={(event) =>
+                            void onTogglePayment(
+                              registration,
+                              event.target.checked
+                            )
+                          }
+                        />
+                        <span>{registration.is_paid ? "已繳" : "未繳"}</span>
+                      </label>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="py-3 pr-3">
+                    {registration &&
+                    (registration.user_id === userId || canManageSlots) ? (
+                      <button
+                        type="button"
+                        onClick={() => void onCancelRegistration(registration)}
+                        disabled={savingRegistrationSlotId === slot.id}
+                        className="text-sm font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
+                      >
+                        取消登記
+                      </button>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-5">
+        {myRegistration ? (
+          <button
+            type="button"
+            onClick={() => void onCancelRegistration(myRegistration)}
+            disabled={savingRegistrationSlotId === slot.id}
+            className="border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            {savingRegistrationSlotId === slot.id ? "取消中..." : "取消我的登記"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void onRegister(slot)}
+            disabled={!canRegister || savingRegistrationSlotId === slot.id}
+            className="bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            {savingRegistrationSlotId === slot.id ? "登記中..." : "登記租板"}
+          </button>
+        )}
+
+        {!slot.is_open && (
+          <p className="mt-2 text-xs text-slate-500">此時段目前未開放登記。</p>
+        )}
+
+        {slot.is_open && isFull && (
+          <p className="mt-2 text-xs text-slate-500">此時段已額滿。</p>
+        )}
+
+        {slot.is_open && !meetsLevel && (
+          <p className="mt-2 text-xs text-slate-500">
+            你的衝浪程度尚未符合此時段最低要求。
+          </p>
+        )}
+      </div>
+    </section>
   );
 }

@@ -6,8 +6,8 @@ import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types";
 import { roleLabels } from "@/lib/types";
 import {
-  canManageMemberRoles,
   canViewAnnouncements,
+  canViewMembers,
   canViewRentals,
 } from "@/lib/permissions";
 
@@ -36,8 +36,8 @@ export function Navbar({
       ? [{ href: "/announcements", label: "公告" }]
       : []),
     ...(canViewRentals(profile) ? [{ href: "/rentals", label: "租板" }] : []),
-    ...(canManageMemberRoles(profile)
-      ? [{ href: "/admin/members", label: "社員管理" }]
+    ...(canViewMembers(profile)
+      ? [{ href: "/admin/members", label: "社員名單" }]
       : []),
   ];
 

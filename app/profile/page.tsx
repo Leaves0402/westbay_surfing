@@ -5,8 +5,14 @@ import type { User } from "@supabase/supabase-js";
 import { Navbar } from "@/components/Navbar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { createClient } from "@/lib/supabase/client";
-import { profileSelectColumns, roleLabels, surfLevelDescriptions } from "@/lib/types";
-import type { Profile } from "@/lib/types";
+import {
+  profileSelectColumns,
+  reviewRequiredSurfLevels,
+  roleLabels,
+  surfLevelDescriptions,
+  type Profile,
+  type SurfLevel,
+} from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
 
 export default function ProfilePage() {
@@ -35,7 +41,7 @@ export default function ProfilePage() {
         <section className="mb-6 border border-slate-200 bg-white p-5">
           <h1 className="text-2xl font-semibold tracking-normal">社員基本資料</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            待審核身份也可以使用這頁。填好資料後，幹部或管理員會在社員管理頁調整身份。
+            填寫姓名、學號與衝浪程度。初階與中階可直接更新，中進階與進階需由幹部或管理員審核。
           </p>
         </section>
 
@@ -63,7 +69,7 @@ export default function ProfilePage() {
           </section>
         ) : (
           <ProfileForm
-            key={profile.id}
+            key={`${profile.id}-${profile.requested_surf_level ?? ""}`}
             user={user}
             profile={profile}
             setStatusMessage={setStatusMessage}
@@ -94,7 +100,9 @@ function ProfileForm({
 }) {
   const [fullName, setFullName] = useState(profile.full_name ?? "");
   const [studentId, setStudentId] = useState(profile.student_id ?? "");
-  const [surfLevel, setSurfLevel] = useState(profile.surf_level ?? "");
+  const [surfLevel, setSurfLevel] = useState(
+    profile.requested_surf_level ?? profile.surf_level ?? "初階"
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSaveProfile = async () => {
@@ -117,26 +125,48 @@ function ProfileForm({
     setStatusMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase
+    const { error: profileError } = await supabase
       .from("profiles")
       .update({
         full_name: fullName.trim(),
         student_id: studentId.trim(),
-        surf_level: surfLevel,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id)
       .select(profileSelectColumns)
       .single();
 
-    setIsSaving(false);
-
-    if (error) {
-      setStatusMessage(`儲存社員資料失敗：${error.message}`);
+    if (profileError) {
+      setIsSaving(false);
+      setStatusMessage(`儲存社員資料失敗：${profileError.message}`);
       return;
     }
 
-    setStatusMessage("社員資料已儲存。");
+    const selectedLevel = surfLevel as SurfLevel;
+    const shouldRequestOrUpdateLevel =
+      selectedLevel !== profile.surf_level ||
+      profile.requested_surf_level !== null;
+
+    if (shouldRequestOrUpdateLevel) {
+      const { error: levelError } = await supabase.rpc("request_surf_level", {
+        target_level: selectedLevel,
+      });
+
+      if (levelError) {
+        setIsSaving(false);
+        setStatusMessage(`更新衝浪程度失敗：${levelError.message}`);
+        return;
+      }
+    }
+
+    setIsSaving(false);
+
+    if (reviewRequiredSurfLevels.includes(selectedLevel)) {
+      setStatusMessage(`已送出${selectedLevel}程度審核。`);
+    } else {
+      setStatusMessage("社員資料已儲存。");
+    }
+
     await reloadProfile();
   };
 
@@ -148,16 +178,22 @@ function ProfileForm({
           <p className="mt-1 break-all font-medium">{user.email}</p>
         </div>
         <div>
-          <p className="text-sm text-slate-500">系統身份</p>
+          <p className="text-sm text-slate-500">系統身分</p>
           <p className="mt-1 font-medium">{roleLabels[profile.role]}</p>
         </div>
         <div>
-          <p className="text-sm text-slate-500">目前衝浪程度</p>
+          <p className="text-sm text-slate-500">已核准程度</p>
           <p className="mt-1 font-medium">
             <SurfLevelBadge level={profile.surf_level} />
           </p>
         </div>
       </div>
+
+      {profile.requested_surf_level && (
+        <p className="mb-6 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          已送出{profile.requested_surf_level}程度審核，等待幹部或管理員處理。
+        </p>
+      )}
 
       <div className="grid gap-4">
         <label className="grid gap-1">
@@ -185,30 +221,37 @@ function ProfileForm({
         <div className="grid gap-2">
           <span className="text-sm font-medium">衝浪程度</span>
           <div className="grid gap-3 md:grid-cols-2">
-            {surfLevelDescriptions.map((level) => (
-              <label
-                key={level.value}
-                className={`border p-4 ${
-                  surfLevel === level.value
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-slate-200 bg-white"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <input
-                    type="radio"
-                    name="surf_level"
-                    value={level.value}
-                    checked={surfLevel === level.value}
-                    onChange={(event) => setSurfLevel(event.target.value)}
-                  />
-                  <SurfLevelBadge level={level.value} />
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {level.description}
-                </p>
-              </label>
-            ))}
+            {surfLevelDescriptions.map((level) => {
+              const needsReview = reviewRequiredSurfLevels.includes(level.value);
+
+              return (
+                <label
+                  key={level.value}
+                  className={`border p-4 ${
+                    surfLevel === level.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="surf_level"
+                      value={level.value}
+                      checked={surfLevel === level.value}
+                      onChange={(event) => setSurfLevel(event.target.value)}
+                    />
+                    <SurfLevelBadge level={level.value} />
+                    {needsReview && (
+                      <span className="text-xs text-amber-700">需審核</span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {level.description}
+                  </p>
+                </label>
+              );
+            })}
           </div>
         </div>
       </div>

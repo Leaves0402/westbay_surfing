@@ -1,10 +1,17 @@
 import type { SurfLevel } from "@/lib/types";
 
-const surfLevelColorClasses: Record<SurfLevel, string> = {
+export const surfLevelColorClasses: Record<SurfLevel, string> = {
   初階: "bg-blue-500",
   中階: "bg-green-500",
   中進階: "bg-yellow-400",
   進階: "bg-red-500",
+};
+
+export const surfLevelBorderClasses: Record<SurfLevel, string> = {
+  初階: "border-blue-500",
+  中階: "border-green-500",
+  中進階: "border-yellow-400",
+  進階: "border-red-500",
 };
 
 export function SurfLevelBadge({ level }: { level: string | null | undefined }) {
