@@ -1,8 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Check,
+  Gauge,
+  Info,
+  ListChecks,
+  Lock,
+  RefreshCw,
+  Users,
+  X,
+} from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { fieldControlClasses } from "@/components/ui/FormField";
+import { MobileTabBar } from "@/components/ui/MobileTabBar";
+import { getRoleTone } from "@/lib/badgeTones";
 import {
   canManageMembers,
   canReviewPendingMembers,
@@ -21,6 +37,15 @@ import {
   type Role,
 } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
+
+function RowSkeleton() {
+  return (
+    <Card className="animate-pulse">
+      <div className="h-4 w-1/3 rounded bg-appBg" />
+      <div className="mt-3 h-3 w-2/3 rounded bg-appBg" />
+    </Card>
+  );
+}
 
 export default function MembersAdminPage() {
   const {
@@ -264,7 +289,7 @@ export default function MembersAdminPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
       <Navbar
         user={user}
         profile={profile}
@@ -273,150 +298,251 @@ export default function MembersAdminPage() {
         onLogout={handleLogout}
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <section className="mb-6 border border-slate-200 bg-white p-5">
-          <h1 className="text-2xl font-semibold tracking-normal">社員名單</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            社員可瀏覽正式成員名單；幹部與管理員可審核待審核社員、調整身分與處理程度申請。
-          </p>
-        </section>
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <Card className="mb-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary">
+              <Users size={22} strokeWidth={1.75} />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">社員名單</h1>
+              <p className="mt-1 text-sm text-text-secondary">
+                社員可瀏覽正式成員名單；幹部與管理員可審核待審核社員、調整身分與處理程度申請。
+              </p>
+            </div>
+          </div>
+        </Card>
 
         {isLoading ? (
-          <section className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
+          <Card className="flex items-center gap-2 text-sm text-text-secondary">
+            <RefreshCw size={16} className="animate-spin" />
             正在讀取登入狀態...
-          </section>
+          </Card>
         ) : !user ? (
-          <section className="border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold">尚未登入</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              請先登入後再查看社員名單。
-            </p>
-          </section>
+          <Card>
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                <Lock size={18} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h2 className="font-semibold text-text-primary">尚未登入</h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  請先登入後再查看社員名單。
+                </p>
+              </div>
+            </div>
+          </Card>
         ) : !canView ? (
-          <section className="border border-amber-200 bg-amber-50 p-5">
-            <h2 className="font-semibold text-amber-950">尚未開通瀏覽權限</h2>
-            <p className="mt-2 text-sm leading-6 text-amber-900">
-              待審核身分只能登入與填寫基本資料，尚不能瀏覽社員名單。
-            </p>
-          </section>
+          <Card className="border-warning/30 bg-warning-light">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning">
+                <Lock size={18} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h2 className="font-semibold text-text-primary">尚未開通瀏覽權限</h2>
+                <p className="mt-1 text-sm leading-6 text-text-primary/80">
+                  待審核身分只能登入與填寫基本資料，尚不能瀏覽社員名單。
+                </p>
+              </div>
+            </div>
+          </Card>
         ) : (
           <div className="grid gap-6">
-            <section className="border border-slate-200 bg-white p-5">
+            <Card>
               <div className="mb-4 flex items-center justify-between gap-4">
-                <h2 className="font-semibold">正式成員列表</h2>
-                <button
-                  type="button"
+                <h2 className="font-semibold text-text-primary">正式成員列表</h2>
+                <Button
+                  variant="outline"
+                  icon={
+                    <RefreshCw
+                      size={16}
+                      className={isLoadingMembers ? "animate-spin" : ""}
+                    />
+                  }
                   onClick={() => void loadMembers()}
-                  className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   重新整理
-                </button>
+                </Button>
               </div>
 
               {isLoadingMembers ? (
-                <p className="text-sm text-slate-600">正在讀取社員資料...</p>
-              ) : sortedOfficialMembers.length === 0 ? (
-                <p className="text-sm text-slate-600">目前沒有正式成員資料。</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200">
-                        <th className="py-3 pr-4 font-medium">姓名</th>
-                        <th className="py-3 pr-4 font-medium">學號</th>
-                        <th className="py-3 pr-4 font-medium">衝浪程度</th>
-                        <th className="py-3 pr-4 font-medium">系統身分</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {sortedOfficialMembers.map((member) => (
-                        <tr key={member.id} className="border-b border-slate-100">
-                          <td className="py-3 pr-4">
-                            {member.full_name || "未填姓名"}
-                          </td>
-                          <td className="py-3 pr-4">
-                            {member.student_id || "未填學號"}
-                          </td>
-                          <td className="py-3 pr-4">
-                            <SurfLevelBadge level={member.surf_level} />
-                          </td>
-                          <td className="py-3 pr-4">
-                            {canManage ? (
-                              <select
-                                value={member.role}
-                                disabled={
-                                  member.id === user.id ||
-                                  savingRoleUserId === member.id
-                                }
-                                onChange={(event) =>
-                                  void handleUpdateRole(
-                                    member,
-                                    event.target.value as Role
-                                  )
-                                }
-                                className="border border-slate-300 px-2 py-1 disabled:cursor-not-allowed disabled:bg-slate-100"
-                              >
-                                {officialMemberRoleOptions.map((role) => (
-                                  <option key={role} value={role}>
-                                    {roleLabels[role]}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              roleLabels[member.role]
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="grid gap-3">
+                  <RowSkeleton />
+                  <RowSkeleton />
+                  <RowSkeleton />
                 </div>
+              ) : sortedOfficialMembers.length === 0 ? (
+                <p className="text-sm text-text-secondary">
+                  目前沒有正式成員資料。
+                </p>
+              ) : (
+                <>
+                  <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
+                          <th className="px-3 py-2 font-medium">姓名</th>
+                          <th className="px-3 py-2 font-medium">學號</th>
+                          <th className="px-3 py-2 font-medium">衝浪程度</th>
+                          <th className="px-3 py-2 font-medium">系統身分</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {sortedOfficialMembers.map((member) => (
+                          <tr
+                            key={member.id}
+                            className="border-b border-line last:border-b-0"
+                          >
+                            <td className="px-3 py-3 font-medium text-text-primary">
+                              {member.full_name || "未填姓名"}
+                            </td>
+                            <td className="px-3 py-3 text-text-secondary">
+                              {member.student_id || "未填學號"}
+                            </td>
+                            <td className="px-3 py-3">
+                              <SurfLevelBadge level={member.surf_level} />
+                            </td>
+                            <td className="px-3 py-3">
+                              {canManage ? (
+                                <select
+                                  value={member.role}
+                                  disabled={
+                                    member.id === user.id ||
+                                    savingRoleUserId === member.id
+                                  }
+                                  onChange={(event) =>
+                                    void handleUpdateRole(
+                                      member,
+                                      event.target.value as Role
+                                    )
+                                  }
+                                  className={`${fieldControlClasses} min-h-9 py-1`}
+                                >
+                                  {officialMemberRoleOptions.map((role) => (
+                                    <option key={role} value={role}>
+                                      {roleLabels[role]}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <Badge tone={getRoleTone(member.role)}>
+                                  {roleLabels[member.role]}
+                                </Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="grid gap-3 md:hidden">
+                    {sortedOfficialMembers.map((member) => (
+                      <div
+                        key={member.id}
+                        className="rounded-xl border border-line bg-appBg p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-medium text-text-primary">
+                              {member.full_name || "未填姓名"}
+                            </p>
+                            <p className="mt-0.5 text-xs text-text-secondary">
+                              學號：{member.student_id || "未填學號"}
+                            </p>
+                          </div>
+                          <SurfLevelBadge level={member.surf_level} />
+                        </div>
+
+                        <div className="mt-3 border-t border-line pt-3">
+                          <p className="mb-1.5 text-xs text-text-secondary">
+                            系統身分
+                          </p>
+                          {canManage ? (
+                            <select
+                              value={member.role}
+                              disabled={
+                                member.id === user.id ||
+                                savingRoleUserId === member.id
+                              }
+                              onChange={(event) =>
+                                void handleUpdateRole(
+                                  member,
+                                  event.target.value as Role
+                                )
+                              }
+                              className={fieldControlClasses}
+                            >
+                              {officialMemberRoleOptions.map((role) => (
+                                <option key={role} value={role}>
+                                  {roleLabels[role]}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <Badge tone={getRoleTone(member.role)}>
+                              {roleLabels[member.role]}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
-            </section>
+            </Card>
 
             {canReviewPending && (
-              <section className="border border-slate-200 bg-white p-5">
-                <h2 className="font-semibold">待審核名單</h2>
+              <Card>
+                <div className="mb-4 flex items-center gap-2">
+                  <ListChecks size={18} className="text-primary" />
+                  <h2 className="font-semibold text-text-primary">待審核名單</h2>
+                </div>
 
                 {pendingMembers.length === 0 ? (
-                  <p className="mt-4 text-sm text-slate-600">
+                  <p className="text-sm text-text-secondary">
                     目前沒有待審核社員。
                   </p>
                 ) : (
                   <>
-                    <div className="mt-4 overflow-x-auto">
+                    <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
                       <table className="w-full border-collapse text-left text-sm">
                         <thead>
-                          <tr className="border-b border-slate-200">
-                            <th className="py-3 pr-4 font-medium">核准</th>
-                            <th className="py-3 pr-4 font-medium">姓名</th>
-                            <th className="py-3 pr-4 font-medium">學號</th>
-                            <th className="py-3 pr-4 font-medium">Email</th>
-                            <th className="py-3 pr-4 font-medium">衝浪程度</th>
+                          <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
+                            <th className="px-3 py-2 font-medium">核准</th>
+                            <th className="px-3 py-2 font-medium">姓名</th>
+                            <th className="px-3 py-2 font-medium">學號</th>
+                            <th className="px-3 py-2 font-medium">Email</th>
+                            <th className="px-3 py-2 font-medium">衝浪程度</th>
                           </tr>
                         </thead>
                         <tbody>
                           {pendingMembers.map((member) => (
                             <tr
                               key={member.id}
-                              className="border-b border-slate-100"
+                              className="border-b border-line last:border-b-0"
                             >
-                              <td className="py-3 pr-4">
+                              <td className="px-3 py-3">
                                 <input
                                   type="checkbox"
                                   checked={selectedPendingIds.has(member.id)}
-                                  onChange={() => togglePendingSelection(member.id)}
+                                  onChange={() =>
+                                    togglePendingSelection(member.id)
+                                  }
+                                  className="h-4 w-4 rounded border-line text-primary focus:ring-2 focus:ring-primary"
                                 />
                               </td>
-                              <td className="py-3 pr-4">
+                              <td className="px-3 py-3 font-medium text-text-primary">
                                 {member.full_name || "未填姓名"}
                               </td>
-                              <td className="py-3 pr-4">
+                              <td className="px-3 py-3 text-text-secondary">
                                 {member.student_id || "未填學號"}
                               </td>
-                              <td className="py-3 pr-4">{member.email}</td>
-                              <td className="py-3 pr-4">
+                              <td className="px-3 py-3 text-text-secondary">
+                                {member.email}
+                              </td>
+                              <td className="px-3 py-3">
                                 <SurfLevelBadge level={member.surf_level} />
                               </td>
                             </tr>
@@ -425,102 +551,191 @@ export default function MembersAdminPage() {
                       </table>
                     </div>
 
-                    <button
-                      type="button"
+                    <div className="grid gap-3 md:hidden">
+                      {pendingMembers.map((member) => (
+                        <label
+                          key={member.id}
+                          className="flex min-h-11 items-start gap-3 rounded-xl border border-line bg-appBg p-3"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedPendingIds.has(member.id)}
+                            onChange={() => togglePendingSelection(member.id)}
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-line text-primary focus:ring-2 focus:ring-primary"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-medium text-text-primary">
+                              {member.full_name || "未填姓名"}
+                            </p>
+                            <p className="mt-0.5 text-xs text-text-secondary">
+                              學號：{member.student_id || "未填學號"}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-text-secondary">
+                              {member.email}
+                            </p>
+                            <div className="mt-1.5">
+                              <SurfLevelBadge level={member.surf_level} />
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    <Button
+                      variant="primary"
+                      fullWidth
+                      className="mt-4 sm:w-auto"
+                      icon={<Check size={16} />}
                       onClick={() => void handleApprovePendingMembers()}
                       disabled={
                         selectedPendingIds.size === 0 || isApprovingPending
                       }
-                      className="mt-4 bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                     >
                       {isApprovingPending ? "儲存中..." : "核准成為社員"}
-                    </button>
+                    </Button>
                   </>
                 )}
-              </section>
+              </Card>
             )}
 
             {canReviewSurfLevels && (
-              <section className="border border-slate-200 bg-white p-5">
-                <h2 className="font-semibold">程度審核</h2>
+              <Card>
+                <div className="mb-4 flex items-center gap-2">
+                  <Gauge size={18} className="text-primary" />
+                  <h2 className="font-semibold text-text-primary">程度審核</h2>
+                </div>
 
                 {surfLevelRequests.length === 0 ? (
-                  <p className="mt-4 text-sm text-slate-600">
+                  <p className="text-sm text-text-secondary">
                     目前沒有程度審核申請。
                   </p>
                 ) : (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="w-full border-collapse text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="py-3 pr-4 font-medium">姓名</th>
-                          <th className="py-3 pr-4 font-medium">學號</th>
-                          <th className="py-3 pr-4 font-medium">目前程度</th>
-                          <th className="py-3 pr-4 font-medium">申請程度</th>
-                          <th className="py-3 pr-4 font-medium">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {surfLevelRequests.map((member) => (
-                          <tr
-                            key={member.id}
-                            className="border-b border-slate-100"
-                          >
-                            <td className="py-3 pr-4">
-                              {member.full_name || "未填姓名"}
-                            </td>
-                            <td className="py-3 pr-4">
-                              {member.student_id || "未填學號"}
-                            </td>
-                            <td className="py-3 pr-4">
-                              <SurfLevelBadge level={member.surf_level} />
-                            </td>
-                            <td className="py-3 pr-4">
-                              <SurfLevelBadge
-                                level={member.requested_surf_level}
-                              />
-                            </td>
-                            <td className="py-3 pr-4">
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleApproveSurfLevel(member.id)
-                                  }
-                                  disabled={reviewingSurfLevelUserId === member.id}
-                                  className="border border-green-300 px-3 py-1 text-sm font-medium text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-slate-400"
-                                >
-                                  核准
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleRejectSurfLevel(member.id)
-                                  }
-                                  disabled={reviewingSurfLevelUserId === member.id}
-                                  className="border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-400"
-                                >
-                                  拒絕
-                                </button>
-                              </div>
-                            </td>
+                  <>
+                    <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
+                      <table className="w-full border-collapse text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
+                            <th className="px-3 py-2 font-medium">姓名</th>
+                            <th className="px-3 py-2 font-medium">學號</th>
+                            <th className="px-3 py-2 font-medium">目前程度</th>
+                            <th className="px-3 py-2 font-medium">申請程度</th>
+                            <th className="px-3 py-2 font-medium">操作</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {surfLevelRequests.map((member) => (
+                            <tr
+                              key={member.id}
+                              className="border-b border-line last:border-b-0"
+                            >
+                              <td className="px-3 py-3 font-medium text-text-primary">
+                                {member.full_name || "未填姓名"}
+                              </td>
+                              <td className="px-3 py-3 text-text-secondary">
+                                {member.student_id || "未填學號"}
+                              </td>
+                              <td className="px-3 py-3">
+                                <SurfLevelBadge level={member.surf_level} />
+                              </td>
+                              <td className="px-3 py-3">
+                                <SurfLevelBadge
+                                  level={member.requested_surf_level}
+                                />
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    className="!min-h-9 !px-2.5 !py-1 !text-xs text-success"
+                                    icon={<Check size={14} />}
+                                    onClick={() =>
+                                      void handleApproveSurfLevel(member.id)
+                                    }
+                                    disabled={
+                                      reviewingSurfLevelUserId === member.id
+                                    }
+                                  >
+                                    核准
+                                  </Button>
+                                  <Button
+                                    variant="danger"
+                                    className="!min-h-9 !px-2.5 !py-1 !text-xs"
+                                    icon={<X size={14} />}
+                                    onClick={() =>
+                                      void handleRejectSurfLevel(member.id)
+                                    }
+                                    disabled={
+                                      reviewingSurfLevelUserId === member.id
+                                    }
+                                  >
+                                    拒絕
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid gap-3 md:hidden">
+                      {surfLevelRequests.map((member) => (
+                        <div
+                          key={member.id}
+                          className="rounded-xl border border-line bg-appBg p-3"
+                        >
+                          <p className="font-medium text-text-primary">
+                            {member.full_name || "未填姓名"}
+                          </p>
+                          <p className="mt-0.5 text-xs text-text-secondary">
+                            學號：{member.student_id || "未填學號"}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2 text-xs text-text-secondary">
+                            <span>目前：</span>
+                            <SurfLevelBadge level={member.surf_level} />
+                            <span>申請：</span>
+                            <SurfLevelBadge level={member.requested_surf_level} />
+                          </div>
+                          <div className="mt-3 flex gap-2 border-t border-line pt-3">
+                            <Button
+                              variant="outline"
+                              fullWidth
+                              className="text-success"
+                              icon={<Check size={16} />}
+                              onClick={() => void handleApproveSurfLevel(member.id)}
+                              disabled={reviewingSurfLevelUserId === member.id}
+                            >
+                              核准
+                            </Button>
+                            <Button
+                              variant="danger"
+                              fullWidth
+                              icon={<X size={16} />}
+                              onClick={() => void handleRejectSurfLevel(member.id)}
+                              disabled={reviewingSurfLevelUserId === member.id}
+                            >
+                              拒絕
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
-              </section>
+              </Card>
             )}
           </div>
         )}
 
         {statusMessage && (
-          <p className="mt-6 border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            {statusMessage}
-          </p>
+          <Card className="mt-6 flex items-start gap-2 text-sm text-text-secondary">
+            <Info size={16} className="mt-0.5 shrink-0 text-text-secondary" />
+            <span>{statusMessage}</span>
+          </Card>
         )}
       </div>
+
+      <MobileTabBar />
     </main>
   );
 }
