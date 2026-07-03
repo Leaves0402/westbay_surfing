@@ -1,26 +1,46 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #fafbfb;
   --foreground: #171717;
 }
 
+/*
+ * Coastal Utility design tokens.
+ * These map to Tailwind utility classes such as bg-primary, text-primary-hover,
+ * bg-primary-light, bg-success-light, etc. (Tailwind v4 CSS-first theme config).
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary: #0e7c86;
+  --color-primary-hover: #0b6570;
+  --color-primary-light: #e3f2f3;
+
+  --color-accent: #ff6b4a;
+
+  --color-bg: #fafbfb;
+  --color-surface: #ffffff;
+  --color-border: #e5e9ea;
+
+  --color-success: #2e9e5b;
+  --color-success-light: #e7f6ec;
+
+  --color-warning: #e8a23d;
+  --color-warning-light: #fdf3e3;
+
+  --color-danger: #e5484d;
+  --color-danger-light: #fce9e9;
+
+  --color-info: #3a8fd9;
+  --color-info-light: #e9f3fc;
+
+  --font-sans: var(--font-inter), var(--font-noto-sans-tc), sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
