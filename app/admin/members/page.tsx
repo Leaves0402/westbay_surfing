@@ -8,10 +8,7 @@ import {
   ListChecks,
   Lock,
   RefreshCw,
-<<<<<<< HEAD
   Search,
-=======
->>>>>>> origin/main
   Users,
   X,
 } from "lucide-react";
@@ -416,7 +413,6 @@ export default function MembersAdminPage() {
         ) : (
           <div className="grid gap-6">
             <Card>
-<<<<<<< HEAD
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-semibold text-text-primary">正式成員列表</h2>
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
@@ -449,22 +445,6 @@ export default function MembersAdminPage() {
                     重新整理
                   </Button>
                 </div>
-=======
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <h2 className="font-semibold text-text-primary">正式成員列表</h2>
-                <Button
-                  variant="outline"
-                  icon={
-                    <RefreshCw
-                      size={16}
-                      className={isLoadingMembers ? "animate-spin" : ""}
-                    />
-                  }
-                  onClick={() => void loadMembers()}
-                >
-                  重新整理
-                </Button>
->>>>>>> origin/main
               </div>
 
               {isLoadingMembers ? (
@@ -477,13 +457,10 @@ export default function MembersAdminPage() {
                 <p className="text-sm text-text-secondary">
                   目前沒有正式成員資料。
                 </p>
-<<<<<<< HEAD
               ) : filteredOfficialMembers.length === 0 ? (
                 <p className="text-sm text-text-secondary">
                   找不到符合條件的社員。
                 </p>
-=======
->>>>>>> origin/main
               ) : (
                 <>
                   <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
@@ -494,21 +471,14 @@ export default function MembersAdminPage() {
                           <th className="px-3 py-2 font-medium">學號</th>
                           <th className="px-3 py-2 font-medium">衝浪程度</th>
                           <th className="px-3 py-2 font-medium">系統身分</th>
-<<<<<<< HEAD
                           {canManage && (
                             <th className="px-3 py-2 font-medium">操作</th>
                           )}
-=======
->>>>>>> origin/main
                         </tr>
                       </thead>
 
                       <tbody>
-<<<<<<< HEAD
                         {filteredOfficialMembers.map((member) => (
-=======
-                        {sortedOfficialMembers.map((member) => (
->>>>>>> origin/main
                           <tr
                             key={member.id}
                             className="border-b border-line last:border-b-0"
@@ -550,7 +520,6 @@ export default function MembersAdminPage() {
                                 </Badge>
                               )}
                             </td>
-<<<<<<< HEAD
                             {canManage && (
                               <td className="px-3 py-3">
                                 {canRemoveMember(member) ? (
@@ -568,8 +537,6 @@ export default function MembersAdminPage() {
                                 ) : null}
                               </td>
                             )}
-=======
->>>>>>> origin/main
                           </tr>
                         ))}
                       </tbody>
@@ -577,11 +544,7 @@ export default function MembersAdminPage() {
                   </div>
 
                   <div className="grid gap-3 md:hidden">
-<<<<<<< HEAD
                     {filteredOfficialMembers.map((member) => (
-=======
-                    {sortedOfficialMembers.map((member) => (
->>>>>>> origin/main
                       <div
                         key={member.id}
                         className="rounded-xl border border-line bg-appBg p-3"
@@ -629,7 +592,6 @@ export default function MembersAdminPage() {
                             </Badge>
                           )}
                         </div>
-<<<<<<< HEAD
 
                         {canRemoveMember(member) && (
                           <div className="mt-3 border-t border-line pt-3">
@@ -644,8 +606,6 @@ export default function MembersAdminPage() {
                             </Button>
                           </div>
                         )}
-=======
->>>>>>> origin/main
                       </div>
                     ))}
                   </div>
