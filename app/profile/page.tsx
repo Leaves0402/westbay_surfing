@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { CircleAlert, Gauge, Info, Lock, RefreshCw, Save, UserRound } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { FormField, fieldControlClasses } from "@/components/ui/FormField";
+import { MobileTabBar } from "@/components/ui/MobileTabBar";
+import { getRoleTone } from "@/lib/badgeTones";
 import { createClient } from "@/lib/supabase/client";
 import {
   profileSelectColumns,
@@ -28,7 +35,7 @@ export default function ProfilePage() {
   } = useAuthProfile();
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
       <Navbar
         user={user}
         profile={profile}
@@ -37,36 +44,52 @@ export default function ProfilePage() {
         onLogout={handleLogout}
       />
 
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-        <section className="mb-6 border border-slate-200 bg-white p-5">
-          <h1 className="text-2xl font-semibold tracking-normal">社員基本資料</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            填寫姓名、學號與衝浪程度。初階與中階可直接更新，中進階與進階需由幹部或管理員審核。
-          </p>
-        </section>
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <Card className="mb-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary">
+              <UserRound size={22} strokeWidth={1.75} />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">社員基本資料</h1>
+              <p className="mt-1 text-sm text-text-secondary">
+                填寫姓名、學號與衝浪程度。初階與中階可直接更新，中進階與進階需由幹部或管理員審核。
+              </p>
+            </div>
+          </div>
+        </Card>
 
         {isLoading ? (
-          <section className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
+          <Card className="flex items-center gap-2 text-sm text-text-secondary">
+            <RefreshCw size={16} className="animate-spin" />
             正在讀取資料...
-          </section>
+          </Card>
         ) : !user ? (
-          <section className="border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold">尚未登入</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              請先使用 Google 登入後再填寫社員資料。
-            </p>
-            <button
-              type="button"
-              onClick={() => void handleGoogleLogin()}
-              className="mt-4 bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Google 登入
-            </button>
-          </section>
+          <Card>
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                <Lock size={18} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h2 className="font-semibold text-text-primary">尚未登入</h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  請先使用 Google 登入後再填寫社員資料。
+                </p>
+                <Button
+                  variant="primary"
+                  className="mt-4"
+                  onClick={() => void handleGoogleLogin()}
+                >
+                  Google 登入
+                </Button>
+              </div>
+            </div>
+          </Card>
         ) : !profile ? (
-          <section className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
+          <Card className="flex items-center gap-2 text-sm text-text-secondary">
+            <RefreshCw size={16} className="animate-spin" />
             正在建立或讀取社員資料...
-          </section>
+          </Card>
         ) : (
           <ProfileForm
             key={`${profile.id}-${profile.requested_surf_level ?? ""}`}
@@ -78,11 +101,14 @@ export default function ProfilePage() {
         )}
 
         {statusMessage && (
-          <p className="mt-6 border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            {statusMessage}
-          </p>
+          <Card className="mt-6 flex items-start gap-2 text-sm text-text-secondary">
+            <Info size={16} className="mt-0.5 shrink-0 text-text-secondary" />
+            <span>{statusMessage}</span>
+          </Card>
         )}
       </div>
+
+      <MobileTabBar />
     </main>
   );
 }
@@ -171,66 +197,78 @@ function ProfileForm({
   };
 
   return (
-    <section className="border border-slate-200 bg-white p-5">
+    <Card>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <div>
-          <p className="text-sm text-slate-500">Email</p>
-          <p className="mt-1 break-all font-medium">{user.email}</p>
+          <p className="text-xs text-text-secondary">Email</p>
+          <p className="mt-1 break-all font-medium text-text-primary">
+            {user.email}
+          </p>
         </div>
         <div>
-          <p className="text-sm text-slate-500">系統身分</p>
-          <p className="mt-1 font-medium">{roleLabels[profile.role]}</p>
+          <p className="text-xs text-text-secondary">系統身分</p>
+          <p className="mt-1">
+            <Badge tone={getRoleTone(profile.role)}>
+              {roleLabels[profile.role]}
+            </Badge>
+          </p>
         </div>
         <div>
-          <p className="text-sm text-slate-500">已核准程度</p>
-          <p className="mt-1 font-medium">
+          <p className="text-xs text-text-secondary">已核准程度</p>
+          <p className="mt-1 font-medium text-text-primary">
             <SurfLevelBadge level={profile.surf_level} />
           </p>
         </div>
       </div>
 
       {profile.requested_surf_level && (
-        <p className="mb-6 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          已送出{profile.requested_surf_level}程度審核，等待幹部或管理員處理。
-        </p>
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-warning/30 bg-warning-light p-3">
+          <CircleAlert
+            size={18}
+            strokeWidth={1.75}
+            className="mt-0.5 shrink-0 text-warning"
+          />
+          <p className="text-sm leading-6 text-text-primary/80">
+            已送出{profile.requested_surf_level}程度審核，等待幹部或管理員處理。
+          </p>
+        </div>
       )}
 
       <div className="grid gap-4">
-        <label className="grid gap-1">
-          <span className="text-sm font-medium">姓名</span>
+        <FormField label="姓名">
           <input
             type="text"
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
-            className="border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+            className={fieldControlClasses}
             placeholder="請輸入姓名"
           />
-        </label>
+        </FormField>
 
-        <label className="grid gap-1">
-          <span className="text-sm font-medium">學號</span>
+        <FormField label="學號">
           <input
             type="text"
             value={studentId}
             onChange={(event) => setStudentId(event.target.value)}
-            className="border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+            className={fieldControlClasses}
             placeholder="請輸入學號"
           />
-        </label>
+        </FormField>
 
         <div className="grid gap-2">
-          <span className="text-sm font-medium">衝浪程度</span>
-          <div className="grid gap-3 md:grid-cols-2">
+          <span className="text-sm font-medium text-text-primary">衝浪程度</span>
+          <div className="grid gap-3 sm:grid-cols-2">
             {surfLevelDescriptions.map((level) => {
               const needsReview = reviewRequiredSurfLevels.includes(level.value);
+              const isSelected = surfLevel === level.value;
 
               return (
                 <label
                   key={level.value}
-                  className={`border p-4 ${
-                    surfLevel === level.value
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-slate-200 bg-white"
+                  className={`min-h-11 rounded-xl border p-4 transition-colors ${
+                    isSelected
+                      ? "border-primary bg-primary-light"
+                      : "border-line bg-surface"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -238,15 +276,19 @@ function ProfileForm({
                       type="radio"
                       name="surf_level"
                       value={level.value}
-                      checked={surfLevel === level.value}
+                      checked={isSelected}
                       onChange={(event) => setSurfLevel(event.target.value)}
+                      className="h-4 w-4 text-primary focus:ring-2 focus:ring-primary"
                     />
                     <SurfLevelBadge level={level.value} />
                     {needsReview && (
-                      <span className="text-xs text-amber-700">需審核</span>
+                      <span className="inline-flex items-center gap-1 text-xs text-warning">
+                        <Gauge size={12} />
+                        需審核
+                      </span>
                     )}
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">
                     {level.description}
                   </p>
                 </label>
@@ -256,14 +298,16 @@ function ProfileForm({
         </div>
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        fullWidth
+        className="mt-6 sm:w-auto"
+        icon={<Save size={16} />}
         onClick={() => void handleSaveProfile()}
         disabled={isSaving}
-        className="mt-6 bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
       >
         {isSaving ? "儲存中..." : "儲存資料"}
-      </button>
-    </section>
+      </Button>
+    </Card>
   );
 }
