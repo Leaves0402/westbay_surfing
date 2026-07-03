@@ -47,19 +47,22 @@ export function Navbar({
 
   return (
     <header className="border-b border-line bg-surface">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-4">
+      <div className="mx-auto flex max-w-6xl flex-nowrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-4">
           <Link
             href="/"
-            className="flex items-center gap-2 text-base font-semibold text-text-primary"
+            className="flex shrink-0 items-center gap-2 text-base font-semibold text-text-primary"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary-light text-primary">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary">
               <Waves size={18} strokeWidth={2} />
             </span>
-            西灣衝浪社
+            <span className="truncate">西灣衝浪社</span>
           </Link>
 
-          <nav className="flex flex-wrap items-center gap-1 text-sm">
+          {/* Top nav links are desktop-only; the mobile bottom MobileTabBar already
+              covers 首頁/公告/租板/我的, so mobile keeps just the logo + logout to
+              avoid duplicating navigation. */}
+          <nav className="hidden items-center gap-1 text-sm md:flex">
             {links.map((link) => {
               const isActive =
                 pathname === link.href ||
@@ -82,10 +85,10 @@ export function Navbar({
           </nav>
         </div>
 
-        <div className="flex items-center gap-3 text-sm">
+        <div className="flex shrink-0 items-center gap-3 text-sm">
           {user ? (
             <>
-              <div className="hidden text-right sm:block">
+              <div className="hidden text-right md:block">
                 <p className="font-medium text-text-primary">
                   {profile?.full_name || user.email}
                 </p>
