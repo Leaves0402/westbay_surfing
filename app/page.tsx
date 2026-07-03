@@ -1,8 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import {
+  CircleAlert,
+  Gauge,
+  Home as HomeIcon,
+  Info,
+  Lock,
+  Mail,
+  Megaphone,
+  RefreshCw,
+  ShieldCheck,
+  UserRound,
+  Users,
+  Waves,
+} from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { LinkButton } from "@/components/ui/LinkButton";
+import { MobileTabBar } from "@/components/ui/MobileTabBar";
+import { getRoleTone } from "@/lib/badgeTones";
 import {
   canManageRentalSlots,
   canViewAnnouncements,
@@ -11,6 +31,13 @@ import {
 } from "@/lib/permissions";
 import { roleLabels } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
+
+const featureIcons = {
+  "/profile": UserRound,
+  "/announcements": Megaphone,
+  "/rentals": Waves,
+  "/admin/members": Users,
+} as const;
 
 export default function Home() {
   const {
@@ -52,7 +79,7 @@ export default function Home() {
   ].filter((link) => link.visible);
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
       <Navbar
         user={user}
         profile={profile}
@@ -61,106 +88,157 @@ export default function Home() {
         onLogout={handleLogout}
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <section className="mb-6 border border-slate-200 bg-white p-5">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <Card className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              
-              <h1 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
-                首頁 
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                這裡顯示目前登入狀態與可用功能入口。
-              </p>
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary">
+                <HomeIcon size={22} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h1 className="text-2xl font-bold text-text-primary">首頁</h1>
+                <p className="mt-1 text-sm text-text-secondary">
+                  這裡顯示目前登入狀態與可用功能入口。
+                </p>
+              </div>
             </div>
 
             {!user && (
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                fullWidth
+                className="sm:w-auto"
                 onClick={() => void handleGoogleLogin()}
                 disabled={isLoading}
-                className="bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 Google 登入
-              </button>
+              </Button>
             )}
           </div>
-        </section>
+        </Card>
 
         {isLoading ? (
-          <section className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
+          <Card className="flex items-center gap-2 text-sm text-text-secondary">
+            <RefreshCw size={16} className="animate-spin" />
             正在讀取登入狀態...
-          </section>
+          </Card>
         ) : !user ? (
-          <section className="border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold">尚未登入</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              請先使用 Google 登入。登入後會自動建立社員資料，預設身分為待審核。
-            </p>
-          </section>
+          <Card>
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                <Lock size={18} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h2 className="font-semibold text-text-primary">尚未登入</h2>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">
+                  請先使用 Google 登入。登入後會自動建立社員資料，預設身分為待審核。
+                </p>
+              </div>
+            </div>
+          </Card>
         ) : (
           <>
-            <section className="mb-6 grid gap-4 md:grid-cols-3">
-              <div className="border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">登入帳號</p>
-                <p className="mt-2 break-all font-medium text-slate-900">
-                  {user.email}
-                </p>
-              </div>
+            <section className="mb-6 grid gap-4 sm:grid-cols-3">
+              <Card className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                  <Mail size={16} strokeWidth={1.75} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs text-text-secondary">登入帳號</p>
+                  <p className="mt-1 truncate font-medium text-text-primary">
+                    {user.email}
+                  </p>
+                </div>
+              </Card>
 
-              <div className="border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">系統身分</p>
-                <p className="mt-2 font-medium text-slate-900">
-                  {profile ? roleLabels[profile.role] : "讀取中"}
-                </p>
-              </div>
+              <Card className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                  <ShieldCheck size={16} strokeWidth={1.75} />
+                </span>
+                <div>
+                  <p className="text-xs text-text-secondary">系統身分</p>
+                  <p className="mt-1">
+                    {profile ? (
+                      <Badge tone={getRoleTone(profile.role)}>
+                        {roleLabels[profile.role]}
+                      </Badge>
+                    ) : (
+                      <span className="font-medium text-text-primary">
+                        讀取中
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </Card>
 
-              <div className="border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">已核准衝浪程度</p>
-                <p className="mt-2 font-medium text-slate-900">
-                  <SurfLevelBadge level={profile?.surf_level} />
-                </p>
-              </div>
+              <Card className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                  <Gauge size={16} strokeWidth={1.75} />
+                </span>
+                <div>
+                  <p className="text-xs text-text-secondary">已核准衝浪程度</p>
+                  <p className="mt-1 font-medium text-text-primary">
+                    <SurfLevelBadge level={profile?.surf_level} />
+                  </p>
+                </div>
+              </Card>
             </section>
 
             {profile?.role === "pending" && (
-              <section className="mb-6 border border-amber-200 bg-amber-50 p-5">
-                <h2 className="font-semibold text-amber-950">待審核中</h2>
-                <p className="mt-2 text-sm leading-6 text-amber-900">
-                  你目前只能登入與填寫基本資料。完成資料後請等待幹部或管理員審核。
-                </p>
-                <Link
-                  href="/profile"
-                  className="mt-4 inline-flex bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-950"
-                >
-                  前往填寫資料
-                </Link>
-              </section>
+              <Card className="mb-6 border-warning/30 bg-warning-light">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning">
+                    <CircleAlert size={18} strokeWidth={1.75} />
+                  </span>
+                  <div>
+                    <h2 className="font-semibold text-text-primary">待審核中</h2>
+                    <p className="mt-1 text-sm leading-6 text-text-primary/80">
+                      你目前只能登入與填寫基本資料。完成資料後請等待幹部或管理員審核。
+                    </p>
+                    <LinkButton href="/profile" className="mt-4">
+                      前往填寫資料
+                    </LinkButton>
+                  </div>
+                </div>
+              </Card>
             )}
 
-            <section className="grid gap-4 md:grid-cols-2">
-              {featureLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="border border-slate-200 bg-white p-5 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  <h2 className="font-semibold text-slate-950">{link.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {link.description}
-                  </p>
-                </Link>
-              ))}
+            <section className="grid gap-4 sm:grid-cols-2">
+              {featureLinks.map((link) => {
+                const Icon =
+                  featureIcons[link.href as keyof typeof featureIcons];
+
+                return (
+                  <Link key={link.href} href={link.href} className="block">
+                    <Card className="flex h-full min-h-11 items-start gap-3 transition-colors hover:border-primary/40">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary">
+                        <Icon size={18} strokeWidth={1.75} />
+                      </span>
+                      <div>
+                        <h2 className="font-semibold text-text-primary">
+                          {link.title}
+                        </h2>
+                        <p className="mt-1 text-sm leading-6 text-text-secondary">
+                          {link.description}
+                        </p>
+                      </div>
+                    </Card>
+                  </Link>
+                );
+              })}
             </section>
           </>
         )}
 
         {statusMessage && (
-          <p className="mt-6 border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            {statusMessage}
-          </p>
+          <Card className="mt-6 flex items-start gap-2 text-sm text-text-secondary">
+            <Info size={16} className="mt-0.5 shrink-0 text-text-secondary" />
+            <span>{statusMessage}</span>
+          </Card>
         )}
       </div>
+
+      <MobileTabBar />
     </main>
   );
 }
