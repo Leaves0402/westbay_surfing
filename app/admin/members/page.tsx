@@ -462,158 +462,100 @@ export default function MembersAdminPage() {
                   找不到符合條件的社員。
                 </p>
               ) : (
-                <>
-                  <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
-                    <table className="w-full table-fixed border-collapse text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
-                          <th className="w-[26%] px-3 py-2 font-medium">姓名</th>
-                          <th className="w-[22%] px-3 py-2 font-medium">學號</th>
-                          <th className="w-[14%] whitespace-nowrap px-3 py-2 font-medium">
-                            衝浪程度
-                          </th>
-                          <th className="w-[22%] px-3 py-2 font-medium">系統身分</th>
+                <div className="overflow-x-auto rounded-xl border border-line">
+                  <table className="w-full table-fixed border-collapse text-left text-xs md:text-sm">
+                    <thead>
+                      <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
+                        <th className="w-[22%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                          姓名
+                        </th>
+                        <th className="w-[24%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                          學號
+                        </th>
+                        <th className="w-[22%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                          身分
+                        </th>
+                        <th className="w-[18%] whitespace-nowrap px-2 py-1.5 font-medium md:px-3 md:py-2">
+                          程度
+                        </th>
+                        {canManage && (
+                          <th className="w-[14%] px-2 py-1.5 md:px-3 md:py-2" />
+                        )}
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredOfficialMembers.map((member) => (
+                        <tr
+                          key={member.id}
+                          className="border-b border-line last:border-b-0"
+                        >
+                          <td className="truncate px-2 py-2 font-medium text-text-primary md:px-3">
+                            {member.full_name || "未填姓名"}
+                          </td>
+                          <td className="truncate px-2 py-2 text-text-secondary md:px-3">
+                            {member.student_id || "未填學號"}
+                          </td>
+                          <td className="px-2 py-2 md:px-3">
+                            {canManage ? (
+                              <select
+                                value={member.role}
+                                disabled={
+                                  member.id === user.id ||
+                                  savingRoleUserId === member.id
+                                }
+                                onChange={(event) =>
+                                  void handleUpdateRole(
+                                    member,
+                                    event.target.value as Role
+                                  )
+                                }
+                                className={`${fieldControlClasses} h-8 w-20 px-1.5 py-0.5 text-xs md:h-9 md:w-28 md:px-2 md:py-1 md:text-sm`}
+                              >
+                                {officialMemberRoleOptions.map((role) => (
+                                  <option key={role} value={role}>
+                                    {roleLabels[role]}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <Badge
+                                tone={getRoleTone(member.role)}
+                                className="!px-1.5 !py-0.5 !text-[10px] md:!px-2 md:!py-1 md:!text-xs"
+                              >
+                                {roleLabels[member.role]}
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2 md:px-3">
+                            <span className="inline-block origin-left scale-90 md:scale-100">
+                              <SurfLevelBadge level={member.surf_level} />
+                            </span>
+                          </td>
                           {canManage && (
-                            <th className="w-[16%] whitespace-nowrap px-3 py-2 text-right font-medium">
-                              操作
-                            </th>
+                            <td className="px-2 py-2 text-right md:px-3">
+                              {canRemoveMember(member) ? (
+                                <button
+                                  type="button"
+                                  aria-label={`移除 ${member.full_name || "未填姓名"}`}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-danger/30 bg-danger-light text-sm font-medium leading-none text-danger transition-colors hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
+                                  onClick={() =>
+                                    void handleRemoveMember(member)
+                                  }
+                                  disabled={
+                                    removingMemberUserId === member.id
+                                  }
+                                >
+                                  -
+                                </button>
+                              ) : null}
+                            </td>
                           )}
                         </tr>
-                      </thead>
-
-                      <tbody>
-                        {filteredOfficialMembers.map((member) => (
-                          <tr
-                            key={member.id}
-                            className="border-b border-line last:border-b-0"
-                          >
-                            <td className="truncate px-3 py-3 font-medium text-text-primary">
-                              {member.full_name || "未填姓名"}
-                            </td>
-                            <td className="truncate px-3 py-3 text-text-secondary">
-                              {member.student_id || "未填學號"}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-3">
-                              <SurfLevelBadge level={member.surf_level} />
-                            </td>
-                            <td className="px-3 py-3">
-                              {canManage ? (
-                                <select
-                                  value={member.role}
-                                  disabled={
-                                    member.id === user.id ||
-                                    savingRoleUserId === member.id
-                                  }
-                                  onChange={(event) =>
-                                    void handleUpdateRole(
-                                      member,
-                                      event.target.value as Role
-                                    )
-                                  }
-                                  className={`${fieldControlClasses} min-h-9 w-full max-w-[7.5rem] py-1`}
-                                >
-                                  {officialMemberRoleOptions.map((role) => (
-                                    <option key={role} value={role}>
-                                      {roleLabels[role]}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <Badge tone={getRoleTone(member.role)}>
-                                  {roleLabels[member.role]}
-                                </Badge>
-                              )}
-                            </td>
-                            {canManage && (
-                              <td className="px-3 py-3 text-right">
-                                {canRemoveMember(member) ? (
-                                  <Button
-                                    variant="danger"
-                                    className="!min-h-9 !px-2.5 !py-1 !text-xs"
-                                    icon={<X size={14} />}
-                                    onClick={() =>
-                                      void handleRemoveMember(member)
-                                    }
-                                    disabled={removingMemberUserId === member.id}
-                                  >
-                                    移除
-                                  </Button>
-                                ) : null}
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="grid gap-3 md:hidden">
-                    {filteredOfficialMembers.map((member) => (
-                      <div
-                        key={member.id}
-                        className="rounded-xl border border-line bg-appBg p-3"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-medium text-text-primary">
-                              {member.full_name || "未填姓名"}
-                            </p>
-                            <p className="mt-0.5 text-xs text-text-secondary">
-                              學號：{member.student_id || "未填學號"}
-                            </p>
-                          </div>
-                          <SurfLevelBadge level={member.surf_level} />
-                        </div>
-
-                        <div className="mt-3 border-t border-line pt-3">
-                          <p className="mb-1.5 text-xs text-text-secondary">
-                            系統身分
-                          </p>
-                          {canManage ? (
-                            <select
-                              value={member.role}
-                              disabled={
-                                member.id === user.id ||
-                                savingRoleUserId === member.id
-                              }
-                              onChange={(event) =>
-                                void handleUpdateRole(
-                                  member,
-                                  event.target.value as Role
-                                )
-                              }
-                              className={fieldControlClasses}
-                            >
-                              {officialMemberRoleOptions.map((role) => (
-                                <option key={role} value={role}>
-                                  {roleLabels[role]}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <Badge tone={getRoleTone(member.role)}>
-                              {roleLabels[member.role]}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {canRemoveMember(member) && (
-                          <div className="mt-3 flex justify-end border-t border-line pt-3">
-                            <Button
-                              variant="danger"
-                              className="!min-h-9"
-                              icon={<X size={16} />}
-                              onClick={() => void handleRemoveMember(member)}
-                              disabled={removingMemberUserId === member.id}
-                            >
-                              移除
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </Card>
 
