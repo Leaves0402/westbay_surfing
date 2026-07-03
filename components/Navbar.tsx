@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { Waves } from "lucide-react";
 import type { Profile } from "@/lib/types";
 import { roleLabels } from "@/lib/types";
+import { getRoleTone } from "@/lib/badgeTones";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import {
   canViewAnnouncements,
   canViewMembers,
@@ -42,10 +46,16 @@ export function Navbar({
   ];
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
+    <header className="border-b border-line bg-surface">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-base font-semibold text-slate-950">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-base font-semibold text-text-primary"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary-light text-primary">
+              <Waves size={18} strokeWidth={2} />
+            </span>
             西灣衝浪社
           </Link>
 
@@ -59,10 +69,10 @@ export function Navbar({
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-2 font-medium ${
+                  className={`flex min-h-11 items-center rounded-xl px-3 py-2 font-medium transition-colors ${
                     isActive
-                      ? "text-blue-700"
-                      : "text-slate-600 hover:text-slate-950"
+                      ? "bg-primary-light text-primary"
+                      : "text-text-secondary hover:bg-appBg hover:text-text-primary"
                   }`}
                 >
                   {link.label}
@@ -76,31 +86,37 @@ export function Navbar({
           {user ? (
             <>
               <div className="hidden text-right sm:block">
-                <p className="font-medium text-slate-900">
+                <p className="font-medium text-text-primary">
                   {profile?.full_name || user.email}
                 </p>
-                <p className="text-xs text-slate-500">
-                  {profile ? roleLabels[profile.role] : "讀取身份中"}
+                <p className="mt-0.5">
+                  {profile ? (
+                    <Badge tone={getRoleTone(profile.role)}>
+                      {roleLabels[profile.role]}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-text-secondary">
+                      讀取身份中
+                    </span>
+                  )}
                 </p>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={() => void onLogout()}
-                className="border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
                 disabled={isLoading}
               >
                 登出
-              </button>
+              </Button>
             </>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={() => void onLogin()}
-              className="bg-blue-600 px-3 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
               disabled={isLoading}
             >
               Google 登入
-            </button>
+            </Button>
           )}
         </div>
       </div>

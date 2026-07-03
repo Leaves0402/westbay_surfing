@@ -36,6 +36,17 @@
   --color-info: #3a8fd9;
   --color-info-light: #e9f3fc;
 
+  /*
+   * Aliases used across non-rentals pages for readability, matching the
+   * page-unification spec naming (bg-appBg / border-line / text-text-primary /
+   * text-text-secondary). Values intentionally mirror bg/border above so the
+   * whole site stays visually identical regardless of which alias is used.
+   */
+  --color-appBg: #fafbfb;
+  --color-line: #e5e9ea;
+  --color-text-primary: #1a2b2e;
+  --color-text-secondary: #5c6e71;
+
   --font-sans: var(--font-inter), var(--font-noto-sans-tc), sans-serif;
 }
 
