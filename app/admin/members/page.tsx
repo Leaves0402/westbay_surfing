@@ -464,15 +464,19 @@ export default function MembersAdminPage() {
               ) : (
                 <>
                   <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
-                    <table className="w-full border-collapse text-left text-sm">
+                    <table className="w-full table-fixed border-collapse text-left text-sm">
                       <thead>
                         <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
-                          <th className="px-3 py-2 font-medium">姓名</th>
-                          <th className="px-3 py-2 font-medium">學號</th>
-                          <th className="px-3 py-2 font-medium">衝浪程度</th>
-                          <th className="px-3 py-2 font-medium">系統身分</th>
+                          <th className="w-[26%] px-3 py-2 font-medium">姓名</th>
+                          <th className="w-[22%] px-3 py-2 font-medium">學號</th>
+                          <th className="w-[14%] whitespace-nowrap px-3 py-2 font-medium">
+                            衝浪程度
+                          </th>
+                          <th className="w-[22%] px-3 py-2 font-medium">系統身分</th>
                           {canManage && (
-                            <th className="px-3 py-2 font-medium">操作</th>
+                            <th className="w-[16%] whitespace-nowrap px-3 py-2 text-right font-medium">
+                              操作
+                            </th>
                           )}
                         </tr>
                       </thead>
@@ -483,13 +487,13 @@ export default function MembersAdminPage() {
                             key={member.id}
                             className="border-b border-line last:border-b-0"
                           >
-                            <td className="px-3 py-3 font-medium text-text-primary">
+                            <td className="truncate px-3 py-3 font-medium text-text-primary">
                               {member.full_name || "未填姓名"}
                             </td>
-                            <td className="px-3 py-3 text-text-secondary">
+                            <td className="truncate px-3 py-3 text-text-secondary">
                               {member.student_id || "未填學號"}
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="whitespace-nowrap px-3 py-3">
                               <SurfLevelBadge level={member.surf_level} />
                             </td>
                             <td className="px-3 py-3">
@@ -506,7 +510,7 @@ export default function MembersAdminPage() {
                                       event.target.value as Role
                                     )
                                   }
-                                  className={`${fieldControlClasses} min-h-9 py-1`}
+                                  className={`${fieldControlClasses} min-h-9 w-full max-w-[7.5rem] py-1`}
                                 >
                                   {officialMemberRoleOptions.map((role) => (
                                     <option key={role} value={role}>
@@ -521,7 +525,7 @@ export default function MembersAdminPage() {
                               )}
                             </td>
                             {canManage && (
-                              <td className="px-3 py-3">
+                              <td className="px-3 py-3 text-right">
                                 {canRemoveMember(member) ? (
                                   <Button
                                     variant="danger"
@@ -594,10 +598,10 @@ export default function MembersAdminPage() {
                         </div>
 
                         {canRemoveMember(member) && (
-                          <div className="mt-3 border-t border-line pt-3">
+                          <div className="mt-3 flex justify-end border-t border-line pt-3">
                             <Button
                               variant="danger"
-                              fullWidth
+                              className="!min-h-9"
                               icon={<X size={16} />}
                               onClick={() => void handleRemoveMember(member)}
                               disabled={removingMemberUserId === member.id}
