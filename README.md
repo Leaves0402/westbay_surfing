@@ -1,36 +1,219 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 西灣衝浪社內部網站
 
-## Getting Started
+本專案為西灣衝浪社內部管理網站，主要提供社員登入、社員資料管理、衝浪等級管理、公告發布與租板日期登記等功能。
+網站採用手機優先設計，方便社員與幹部在手機上快速查看與操作。
 
-First, run the development server:
+網址：https://westbay-surfing.vercel.app/
+
+---
+
+## 一、網站架構
+
+本網站使用以下技術建置：
+
+* **Next.js**：前端框架與頁面路由
+* **Tailwind CSS**：網站樣式與響應式版面設計
+* **Supabase**：後端資料庫、身份驗證與權限資料管理
+* **Google Login**：社員使用 Google 帳號登入
+* **Vercel**：網站部署平台
+* **GitHub**：版本控制與部署連接
+
+整體架構如下：
+
+```text
+使用者
+  ↓
+Next.js 前端頁面
+  ↓
+Supabase Auth 身份驗證
+  ↓
+Supabase Database 資料儲存
+  ↓
+Vercel 部署與公開網站
+```
+
+---
+
+## 二、主要功能
+
+### 1. 社員登入
+
+社員可使用 Google 帳號登入網站。
+登入後，系統會根據使用者資料判斷身分與權限。
+
+主要用途：
+
+* 確認社員身份
+* 建立社員基本資料
+* 控制不同角色可使用的功能
+
+---
+
+### 2. 社員資料管理
+
+社員登入後可填寫與查看基本資料。
+
+資料內容包含：
+
+* 姓名
+* 學號
+* 聯絡方式
+* 社員身份
+* 衝浪等級
+
+幹部或管理員可協助管理社員資料。
+
+---
+
+### 3. 社員分級管理
+
+網站支援社員衝浪等級管理，方便社團安排活動、租板與安全控管。
+
+等級包含：
+
+* 初階
+* 中階
+* 中進階
+* 進階
+
+若社員申請較高等級，需由幹部或管理員審核後更新。
+
+---
+
+### 4. 公告功能
+
+幹部或管理員可發布社團公告。
+社員可在網站中查看最新消息。
+
+公告可用於：
+
+* 活動通知
+* 租板提醒
+* 安全宣導
+* 社團行政事項
+
+---
+
+### 5. 租板日期登記
+
+社員可查看或登記租板日期。
+幹部可透過後台查看租板狀況，方便管理板子使用與責任分配。
+
+租板資料可包含：
+
+* 租板日期
+* 租借社員
+* 負責幹部或板務
+* 備註事項
+
+---
+
+### 6. 後台管理
+
+網站依照使用者角色提供不同操作權限。
+
+角色大致分為：
+
+* 管理員
+* 幹部
+* 板務
+* 社員
+
+不同角色可使用的功能不同，例如：
+
+* 社員：查看公告、查看社員名單、登記租板
+* 板務：協助租板管理
+* 幹部：審核社員、管理公告、管理租板
+* 管理員：完整管理權限
+
+---
+
+## 三、權限設計
+
+本網站透過 Supabase Auth 與資料庫角色欄位進行權限控制。
+
+基本原則：
+
+```text
+未登入使用者：不可進入內部頁面
+社員：可查看基本資訊與使用社員功能
+板務：可協助管理租板相關資料
+幹部：可管理社員、公告與租板資料
+管理員：擁有完整管理權限
+```
+
+---
+
+## 四、開發與測試
+
+安裝依賴：
+
+```bash
+npm install
+```
+
+啟動本地開發伺服器：
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+開啟瀏覽器進入：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 五、環境變數
 
-To learn more about Next.js, take a look at the following resources:
+本專案需要設定 Supabase 與 Google Login 相關環境變數。
+請在本地建立 `.env.local` 檔案，並填入對應金鑰。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+範例：
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
 
-## Deploy on Vercel
+注意：
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+.env.local 不應提交到 GitHub。
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 六、部署方式
+
+本專案使用 Vercel 部署。
+
+基本流程：
+
+```text
+GitHub repository
+  ↓
+連接 Vercel
+  ↓
+設定環境變數
+  ↓
+自動部署 Next.js 專案
+```
+
+當 main branch 有新的 commit 並 push 到 GitHub 後，Vercel 會自動重新部署網站。
+
+---
+
+## 七、專案目標
+
+本網站的目標不是做成大型公開平台，而是作為西灣衝浪社內部使用的輕量管理系統。
+
+主要目標：
+
+* 減少幹部人工整理資料的時間
+* 統一社員資料與衝浪等級
+* 讓租板與公告流程更清楚
+* 提高社團內部管理效率
+* 讓手機操作足夠方便
