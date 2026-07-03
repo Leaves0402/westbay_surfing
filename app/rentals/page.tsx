@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
+import { getRoleTone, getSurfLevelTone } from "@/lib/badgeTones";
 import {
   canManageRentalPayments,
   canManageRentalSlots,
@@ -38,19 +39,10 @@ import {
   type PublicMemberProfile,
   type RentalRegistration,
   type RentalSlot,
-  type Role,
-  type SurfLevel,
 } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
 
 const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
-
-const surfLevelToneMap: Record<SurfLevel, BadgeTone> = {
-  初階: "info",
-  中階: "success",
-  中進階: "warning",
-  進階: "danger",
-};
 
 const toneDotClasses: Record<BadgeTone, string> = {
   primary: "bg-primary",
@@ -59,14 +51,6 @@ const toneDotClasses: Record<BadgeTone, string> = {
   danger: "bg-danger",
   info: "bg-info",
   neutral: "bg-slate-300",
-};
-
-const roleBadgeToneMap: Record<Role, BadgeTone> = {
-  pending: "neutral",
-  member: "info",
-  board_manager: "primary",
-  officer: "warning",
-  admin: "danger",
 };
 
 type ResponsibleProfile = Pick<
@@ -130,11 +114,6 @@ function getCalendarCells(monthCursor: Date) {
   });
 }
 
-function getSurfLevelTone(level: string | null | undefined): BadgeTone {
-  if (!level) return "neutral";
-  return surfLevelToneMap[level as SurfLevel] ?? "neutral";
-}
-
 function SurfLevelPill({ level }: { level: string | null | undefined }) {
   if (!level) {
     return <span className="text-sm text-slate-400">未填寫</span>;
@@ -170,7 +149,7 @@ function ResponsiblePersonTag({
 
   return (
     <span className="inline-flex items-center gap-2">
-      <Badge tone={roleBadgeToneMap[info.role]}>{roleLabels[info.role]}</Badge>
+      <Badge tone={getRoleTone(info.role)}>{roleLabels[info.role]}</Badge>
       <span className="text-sm font-medium text-slate-700">{info.name}</span>
     </span>
   );
