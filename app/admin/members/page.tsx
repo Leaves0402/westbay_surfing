@@ -8,6 +8,7 @@ import {
   ListChecks,
   Lock,
   RefreshCw,
+  Search,
   Users,
   X,
 } from "lucide-react";
@@ -72,6 +73,10 @@ export default function MembersAdminPage() {
   const [reviewingSurfLevelUserId, setReviewingSurfLevelUserId] = useState<
     string | null
   >(null);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [removingMemberUserId, setRemovingMemberUserId] = useState<
+    string | null
+  >(null);
 
   const canView = canViewMembers(profile);
   const canManage = canManageMembers(profile);
@@ -93,6 +98,23 @@ export default function MembersAdminPage() {
         return (a.full_name ?? "").localeCompare(b.full_name ?? "", "zh-Hant");
       }),
     [officialMembers]
+  );
+
+  const filteredOfficialMembers = useMemo(() => {
+    const query = memberSearchQuery.trim().toLowerCase();
+    if (!query) return sortedOfficialMembers;
+
+    return sortedOfficialMembers.filter((member) =>
+      (member.full_name ?? "").toLowerCase().includes(query)
+    );
+  }, [memberSearchQuery, sortedOfficialMembers]);
+
+  const canRemoveMember = useCallback(
+    (member: PublicMemberProfile) =>
+      canManage &&
+      member.id !== user?.id &&
+      member.role !== "admin",
+    [canManage, user?.id]
   );
 
   const loadMembers = useCallback(async () => {
@@ -288,6 +310,48 @@ export default function MembersAdminPage() {
     await loadMembers();
   };
 
+  const handleRemoveMember = async (targetProfile: PublicMemberProfile) => {
+    if (!canManage) {
+      setStatusMessage("只有幹部與管理員可以移除正式成員。");
+      return;
+    }
+
+    if (targetProfile.id === user?.id) {
+      setStatusMessage("不能移除自己。");
+      return;
+    }
+
+    if (targetProfile.role === "admin") {
+      setStatusMessage("不能移除管理員。");
+      return;
+    }
+
+    const displayName = targetProfile.full_name || "未填姓名";
+    if (
+      !window.confirm(`確定要將【${displayName}】移出正式成員名單嗎？`)
+    ) {
+      return;
+    }
+
+    setRemovingMemberUserId(targetProfile.id);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("remove_official_member", {
+      target_user_id: targetProfile.id,
+    });
+
+    setRemovingMemberUserId(null);
+
+    if (error) {
+      setStatusMessage(`移除成員失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已將成員移出正式成員名單。");
+    await loadMembers();
+  };
+
   return (
     <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
       <Navbar
@@ -349,20 +413,38 @@ export default function MembersAdminPage() {
         ) : (
           <div className="grid gap-6">
             <Card>
-              <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-semibold text-text-primary">正式成員列表</h2>
-                <Button
-                  variant="outline"
-                  icon={
-                    <RefreshCw
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                  <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+                    <Search
                       size={16}
-                      className={isLoadingMembers ? "animate-spin" : ""}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"
                     />
-                  }
-                  onClick={() => void loadMembers()}
-                >
-                  重新整理
-                </Button>
+                    <input
+                      type="search"
+                      value={memberSearchQuery}
+                      onChange={(event) =>
+                        setMemberSearchQuery(event.target.value)
+                      }
+                      placeholder="搜尋社員姓名"
+                      className={`${fieldControlClasses} min-h-9 py-1.5 pl-9`}
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="shrink-0"
+                    icon={
+                      <RefreshCw
+                        size={16}
+                        className={isLoadingMembers ? "animate-spin" : ""}
+                      />
+                    }
+                    onClick={() => void loadMembers()}
+                  >
+                    重新整理
+                  </Button>
+                </div>
               </div>
 
               {isLoadingMembers ? (
@@ -375,6 +457,10 @@ export default function MembersAdminPage() {
                 <p className="text-sm text-text-secondary">
                   目前沒有正式成員資料。
                 </p>
+              ) : filteredOfficialMembers.length === 0 ? (
+                <p className="text-sm text-text-secondary">
+                  找不到符合條件的社員。
+                </p>
               ) : (
                 <>
                   <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
@@ -385,11 +471,14 @@ export default function MembersAdminPage() {
                           <th className="px-3 py-2 font-medium">學號</th>
                           <th className="px-3 py-2 font-medium">衝浪程度</th>
                           <th className="px-3 py-2 font-medium">系統身分</th>
+                          {canManage && (
+                            <th className="px-3 py-2 font-medium">操作</th>
+                          )}
                         </tr>
                       </thead>
 
                       <tbody>
-                        {sortedOfficialMembers.map((member) => (
+                        {filteredOfficialMembers.map((member) => (
                           <tr
                             key={member.id}
                             className="border-b border-line last:border-b-0"
@@ -431,6 +520,23 @@ export default function MembersAdminPage() {
                                 </Badge>
                               )}
                             </td>
+                            {canManage && (
+                              <td className="px-3 py-3">
+                                {canRemoveMember(member) ? (
+                                  <Button
+                                    variant="danger"
+                                    className="!min-h-9 !px-2.5 !py-1 !text-xs"
+                                    icon={<X size={14} />}
+                                    onClick={() =>
+                                      void handleRemoveMember(member)
+                                    }
+                                    disabled={removingMemberUserId === member.id}
+                                  >
+                                    移除
+                                  </Button>
+                                ) : null}
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -438,7 +544,7 @@ export default function MembersAdminPage() {
                   </div>
 
                   <div className="grid gap-3 md:hidden">
-                    {sortedOfficialMembers.map((member) => (
+                    {filteredOfficialMembers.map((member) => (
                       <div
                         key={member.id}
                         className="rounded-xl border border-line bg-appBg p-3"
@@ -486,6 +592,20 @@ export default function MembersAdminPage() {
                             </Badge>
                           )}
                         </div>
+
+                        {canRemoveMember(member) && (
+                          <div className="mt-3 border-t border-line pt-3">
+                            <Button
+                              variant="danger"
+                              fullWidth
+                              icon={<X size={16} />}
+                              onClick={() => void handleRemoveMember(member)}
+                              disabled={removingMemberUserId === member.id}
+                            >
+                              移除
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
