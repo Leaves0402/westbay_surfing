@@ -1,7 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  Info,
+  Lock,
+  Megaphone,
+  PenLine,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { FormField, fieldControlClasses } from "@/components/ui/FormField";
+import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import {
   canManageAnnouncements,
   canViewAnnouncements,
@@ -18,6 +32,17 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function AnnouncementSkeleton() {
+  return (
+    <Card className="animate-pulse">
+      <div className="h-4 w-1/3 rounded bg-appBg" />
+      <div className="mt-2 h-3 w-1/5 rounded bg-appBg" />
+      <div className="mt-4 h-3 w-full rounded bg-appBg" />
+      <div className="mt-2 h-3 w-4/5 rounded bg-appBg" />
+    </Card>
+  );
 }
 
 export default function AnnouncementsPage() {
@@ -205,7 +230,7 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
       <Navbar
         user={user}
         profile={profile}
@@ -214,160 +239,208 @@ export default function AnnouncementsPage() {
         onLogout={handleLogout}
       />
 
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        <section className="mb-6 border border-slate-200 bg-white p-5">
-          <h1 className="text-2xl font-semibold tracking-normal">公告</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            社員以上可以查看公告；幹部與管理員可以新增、編輯與刪除公告。
-          </p>
-        </section>
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <Card className="mb-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary">
+              <Megaphone size={22} strokeWidth={1.75} />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">公告</h1>
+              <p className="mt-1 text-sm text-text-secondary">
+                社員以上可以查看公告；幹部與管理員可以新增、編輯與刪除公告。
+              </p>
+            </div>
+          </div>
+        </Card>
 
         {isLoading ? (
-          <section className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
+          <Card className="flex items-center gap-2 text-sm text-text-secondary">
+            <RefreshCw size={16} className="animate-spin" />
             正在讀取登入狀態...
-          </section>
+          </Card>
         ) : !user ? (
-          <section className="border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold">尚未登入</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              請先登入後再查看公告。
-            </p>
-          </section>
+          <Card>
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                <Lock size={18} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h2 className="font-semibold text-text-primary">尚未登入</h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  請先登入後再查看公告。
+                </p>
+              </div>
+            </div>
+          </Card>
         ) : !canView ? (
-          <section className="border border-amber-200 bg-amber-50 p-5">
-            <h2 className="font-semibold text-amber-950">尚未開通公告權限</h2>
-            <p className="mt-2 text-sm leading-6 text-amber-900">
-              目前身份只能登入與填寫資料，請等待幹部或管理員審核。
-            </p>
-          </section>
+          <Card className="border-warning/30 bg-warning-light">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning">
+                <Lock size={18} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h2 className="font-semibold text-text-primary">尚未開通公告權限</h2>
+                <p className="mt-1 text-sm leading-6 text-text-primary/80">
+                  目前身份只能登入與填寫資料，請等待幹部或管理員審核。
+                </p>
+              </div>
+            </div>
+          </Card>
         ) : (
           <>
             {canManage && (
-              <section className="mb-6 border border-slate-200 bg-white p-5">
-                <h2 className="font-semibold">新增公告</h2>
-                <div className="mt-4 grid gap-3">
-                  <input
-                    type="text"
-                    value={newAnnouncementTitle}
-                    onChange={(event) =>
-                      setNewAnnouncementTitle(event.target.value)
-                    }
-                    className="border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-                    placeholder="公告標題"
-                  />
-                  <textarea
-                    value={newAnnouncementContent}
-                    onChange={(event) =>
-                      setNewAnnouncementContent(event.target.value)
-                    }
-                    className="min-h-28 border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-                    placeholder="公告內容"
-                  />
+              <Card className="mb-6">
+                <div className="mb-4 flex items-center gap-2">
+                  <Plus size={18} className="text-primary" strokeWidth={2} />
+                  <h2 className="font-semibold text-text-primary">新增公告</h2>
                 </div>
-                <button
-                  type="button"
+
+                <div className="grid gap-4">
+                  <FormField label="公告標題">
+                    <input
+                      type="text"
+                      value={newAnnouncementTitle}
+                      onChange={(event) =>
+                        setNewAnnouncementTitle(event.target.value)
+                      }
+                      className={fieldControlClasses}
+                      placeholder="公告標題"
+                    />
+                  </FormField>
+                  <FormField label="公告內容">
+                    <textarea
+                      value={newAnnouncementContent}
+                      onChange={(event) =>
+                        setNewAnnouncementContent(event.target.value)
+                      }
+                      className={`min-h-28 ${fieldControlClasses}`}
+                      placeholder="公告內容"
+                    />
+                  </FormField>
+                </div>
+
+                <Button
+                  variant="primary"
+                  fullWidth
+                  className="mt-4 sm:w-auto"
+                  icon={<Plus size={18} />}
                   onClick={() => void handleCreateAnnouncement()}
                   disabled={isCreatingAnnouncement}
-                  className="mt-4 bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                 >
                   {isCreatingAnnouncement ? "新增中..." : "新增公告"}
-                </button>
-              </section>
+                </Button>
+              </Card>
             )}
 
             <section className="grid gap-4">
               <div className="flex items-center justify-between gap-4">
-                <h2 className="font-semibold">公告列表</h2>
-                <button
-                  type="button"
+                <h2 className="font-semibold text-text-primary">公告列表</h2>
+                <Button
+                  variant="outline"
+                  icon={
+                    <RefreshCw
+                      size={16}
+                      className={isLoadingAnnouncements ? "animate-spin" : ""}
+                    />
+                  }
                   onClick={() => void loadAnnouncements()}
-                  className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
                 >
                   重新整理
-                </button>
+                </Button>
               </div>
 
               {isLoadingAnnouncements ? (
-                <p className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
-                  正在讀取公告...
-                </p>
+                <>
+                  <AnnouncementSkeleton />
+                  <AnnouncementSkeleton />
+                </>
               ) : announcements.length === 0 ? (
-                <p className="border border-slate-200 bg-white p-5 text-sm text-slate-600">
-                  目前沒有公告。
-                </p>
+                <Card className="flex flex-col items-center gap-2 py-10 text-center">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-appBg text-text-secondary">
+                    <Megaphone size={22} strokeWidth={1.75} />
+                  </span>
+                  <h3 className="font-semibold text-text-primary">目前沒有公告</h3>
+                  <p className="max-w-xs text-sm text-text-secondary">
+                    {canManage
+                      ? "使用上方表單新增第一則公告。"
+                      : "有新公告時會顯示在這裡。"}
+                  </p>
+                </Card>
               ) : (
                 announcements.map((announcement) => {
                   const isEditing = editingAnnouncementId === announcement.id;
 
                   return (
-                    <article
-                      key={announcement.id}
-                      className="border border-slate-200 bg-white p-5"
-                    >
+                    <Card key={announcement.id}>
                       {isEditing ? (
-                        <div className="grid gap-3">
-                          <input
-                            type="text"
-                            value={editingAnnouncementTitle}
-                            onChange={(event) =>
-                              setEditingAnnouncementTitle(event.target.value)
-                            }
-                            className="border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-                          />
-                          <textarea
-                            value={editingAnnouncementContent}
-                            onChange={(event) =>
-                              setEditingAnnouncementContent(event.target.value)
-                            }
-                            className="min-h-28 border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-                          />
+                        <div className="grid gap-4">
+                          <FormField label="公告標題">
+                            <input
+                              type="text"
+                              value={editingAnnouncementTitle}
+                              onChange={(event) =>
+                                setEditingAnnouncementTitle(event.target.value)
+                              }
+                              className={fieldControlClasses}
+                            />
+                          </FormField>
+                          <FormField label="公告內容">
+                            <textarea
+                              value={editingAnnouncementContent}
+                              onChange={(event) =>
+                                setEditingAnnouncementContent(event.target.value)
+                              }
+                              className={`min-h-28 ${fieldControlClasses}`}
+                            />
+                          </FormField>
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
+                            <Button
+                              variant="primary"
                               onClick={() =>
                                 void handleUpdateAnnouncement(announcement.id)
                               }
                               disabled={updatingAnnouncementId === announcement.id}
-                              className="bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                             >
                               {updatingAnnouncementId === announcement.id
                                 ? "更新中..."
                                 : "儲存"}
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
+                              variant="outline"
+                              icon={<X size={16} />}
                               onClick={cancelEditAnnouncement}
-                              className="border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                             >
                               取消
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       ) : (
                         <>
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <h3 className="text-lg font-semibold">
+                              <h3 className="text-lg font-semibold text-text-primary">
                                 {announcement.title}
                               </h3>
-                              <p className="mt-1 text-xs text-slate-500">
+                              <p className="mt-1 text-xs text-text-secondary">
                                 {formatDateTime(announcement.created_at)}
                               </p>
                             </div>
 
                             {canManage && (
                               <div className="flex shrink-0 gap-2">
-                                <button
-                                  type="button"
+                                <Button
+                                  variant="outline"
+                                  icon={<PenLine size={16} />}
                                   onClick={() =>
                                     startEditAnnouncement(announcement)
                                   }
-                                  className="border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                                 >
                                   編輯
-                                </button>
-                                <button
-                                  type="button"
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  icon={<Trash2 size={16} />}
                                   onClick={() =>
                                     void handleDeleteAnnouncement(
                                       announcement.id
@@ -376,22 +449,21 @@ export default function AnnouncementsPage() {
                                   disabled={
                                     deletingAnnouncementId === announcement.id
                                   }
-                                  className="border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-400"
                                 >
                                   {deletingAnnouncementId === announcement.id
                                     ? "刪除中..."
                                     : "刪除"}
-                                </button>
+                                </Button>
                               </div>
                             )}
                           </div>
 
-                          <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                          <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-text-primary/80">
                             {announcement.content}
                           </p>
                         </>
                       )}
-                    </article>
+                    </Card>
                   );
                 })
               )}
@@ -400,11 +472,14 @@ export default function AnnouncementsPage() {
         )}
 
         {statusMessage && (
-          <p className="mt-6 border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            {statusMessage}
-          </p>
+          <Card className="mt-6 flex items-start gap-2 text-sm text-text-secondary">
+            <Info size={16} className="mt-0.5 shrink-0 text-text-secondary" />
+            <span>{statusMessage}</span>
+          </Card>
         )}
       </div>
+
+      <MobileTabBar />
     </main>
   );
 }
