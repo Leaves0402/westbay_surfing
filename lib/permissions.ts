@@ -52,6 +52,14 @@ export function canManageRentalPayments(input: RoleInput) {
   return hasAtLeastRole(input, "board_manager");
 }
 
+export function canViewUnpaidRentals(input: RoleInput) {
+  return hasAtLeastRole(input, "board_manager");
+}
+
+export function canMarkRentalPaid(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
 export function canViewMembers(input: RoleInput) {
   return canUseMemberFeatures(input);
 }

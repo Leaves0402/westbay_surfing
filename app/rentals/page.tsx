@@ -26,9 +26,10 @@ import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { getRoleTone, getSurfLevelTone } from "@/lib/badgeTones";
 import {
-  canManageRentalPayments,
   canManageRentalSlots,
+  canMarkRentalPaid,
   canViewRentals,
+  canViewUnpaidRentals,
   userMeetsSurfLevel,
 } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -93,6 +94,27 @@ function formatMonth(date: Date) {
 
 function formatTime(timeString: string) {
   return timeString.slice(0, 5);
+}
+
+function getSlotStartDateTime(
+  slot: Pick<RentalSlot, "rental_date" | "start_time">
+) {
+  const time = formatTime(slot.start_time);
+  return new Date(`${slot.rental_date}T${time}:00`);
+}
+
+function hasRentalSlotStarted(
+  slot: Pick<RentalSlot, "rental_date" | "start_time">
+) {
+  return Date.now() >= getSlotStartDateTime(slot).getTime();
+}
+
+function formatShortDate(dateString: string) {
+  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
 function getCalendarCells(monthCursor: Date) {
@@ -202,7 +224,8 @@ export default function RentalsPage() {
 
   const canView = canViewRentals(profile);
   const canManageSlots = canManageRentalSlots(profile);
-  const canManagePayments = canManageRentalPayments(profile);
+  const canViewUnpaid = canViewUnpaidRentals(profile);
+  const canMarkPaid = canMarkRentalPaid(profile);
 
   const today = useMemo(() => getTodayDate(), []);
 
@@ -258,6 +281,41 @@ export default function RentalsPage() {
     [rentalRegistrations, user]
   );
 
+  const myUnpaidCount = useMemo(() => {
+    if (!user) return 0;
+
+    return rentalRegistrations.filter((registration) => {
+      if (registration.user_id !== user.id || registration.is_paid) {
+        return false;
+      }
+
+      const slot = rentalSlots.find(
+        (item) => item.id === registration.rental_slot_id
+      );
+      return slot ? hasRentalSlotStarted(slot) : false;
+    }).length;
+  }, [rentalRegistrations, rentalSlots, user]);
+
+  const unpaidRegistrations = useMemo(() => {
+    return rentalRegistrations
+      .filter((registration) => {
+        if (registration.is_paid) return false;
+        const slot = rentalSlots.find(
+          (item) => item.id === registration.rental_slot_id
+        );
+        return slot ? hasRentalSlotStarted(slot) : false;
+      })
+      .sort((a, b) => {
+        const slotA = rentalSlots.find((item) => item.id === a.rental_slot_id);
+        const slotB = rentalSlots.find((item) => item.id === b.rental_slot_id);
+        if (!slotA || !slotB) return 0;
+
+        const dateCompare = slotA.rental_date.localeCompare(slotB.rental_date);
+        if (dateCompare !== 0) return dateCompare;
+        return slotA.start_time.localeCompare(slotB.start_time);
+      });
+  }, [rentalRegistrations, rentalSlots]);
+
   const loadRentalData = useCallback(async () => {
     setIsLoadingRentals(true);
     setStatusMessage("");
@@ -273,7 +331,9 @@ export default function RentalsPage() {
         .order("start_time", { ascending: true }),
       supabase
         .from("rental_registrations")
-        .select("id, rental_slot_id, user_id, is_paid, created_at, updated_at")
+        .select(
+          "id, rental_slot_id, user_id, is_paid, paid_at, paid_by, created_at, updated_at"
+        )
         .order("created_at", { ascending: true }),
       supabase
         .from("public_member_profiles")
@@ -489,14 +549,19 @@ export default function RentalsPage() {
       return;
     }
 
+    if (myUnpaidCount >= 2) {
+      setStatusMessage(
+        `您目前租板未繳費 ${myUnpaidCount}/2，請先完成補繳後再租板`
+      );
+      return;
+    }
+
     setSavingRegistrationSlotId(slot.id);
     setStatusMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase.from("rental_registrations").insert({
-      rental_slot_id: slot.id,
-      user_id: user.id,
-      is_paid: false,
+    const { error } = await supabase.rpc("register_rental_slot", {
+      target_slot_id: slot.id,
     });
 
     setSavingRegistrationSlotId(null);
@@ -507,7 +572,11 @@ export default function RentalsPage() {
     }
 
     setSelectedSlotId(slot.id);
-    setStatusMessage("已登記租板。");
+    setStatusMessage(
+      myUnpaidCount === 1
+        ? "已登記租板。提醒：您目前租板未繳費 1/2。"
+        : "已登記租板。"
+    );
     await loadRentalData();
   };
 
@@ -524,14 +593,21 @@ export default function RentalsPage() {
       return;
     }
 
+    const slot = rentalSlots.find(
+      (item) => item.id === registration.rental_slot_id
+    );
+    if (slot && hasRentalSlotStarted(slot)) {
+      setStatusMessage("租板時段已開始，無法取消");
+      return;
+    }
+
     setSavingRegistrationSlotId(registration.rental_slot_id);
     setStatusMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase
-      .from("rental_registrations")
-      .delete()
-      .eq("id", registration.id);
+    const { error } = await supabase.rpc("cancel_rental_registration", {
+      target_registration_id: registration.id,
+    });
 
     setSavingRegistrationSlotId(null);
 
@@ -548,8 +624,8 @@ export default function RentalsPage() {
     registration: RentalRegistration,
     isPaid: boolean
   ) => {
-    if (!canManagePayments) {
-      setStatusMessage("只有板務、幹部與管理員可以更新繳費狀態。");
+    if (!canMarkPaid) {
+      setStatusMessage("只有幹部與管理員可以更新繳費狀態。");
       return;
     }
 
@@ -557,27 +633,70 @@ export default function RentalsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase
-      .from("rental_registrations")
-      .update({
-        is_paid: isPaid,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", registration.id);
+
+    if (isPaid) {
+      const { error } = await supabase.rpc("mark_rental_registration_paid", {
+        target_registration_id: registration.id,
+      });
+
+      setUpdatingPaymentRegistrationId(null);
+
+      if (error) {
+        setStatusMessage(`更新繳費狀態失敗：${error.message}`);
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("rental_registrations")
+        .update({
+          is_paid: false,
+          paid_at: null,
+          paid_by: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", registration.id);
+
+      setUpdatingPaymentRegistrationId(null);
+
+      if (error) {
+        setStatusMessage(`更新繳費狀態失敗：${error.message}`);
+        return;
+      }
+    }
+
+    setStatusMessage("繳費狀態已更新。");
+    await loadRentalData();
+  };
+
+  const handleMarkUnpaidAsPaid = async (registration: RentalRegistration) => {
+    if (!canMarkPaid) {
+      setStatusMessage("只有幹部與管理員可以標記補繳。");
+      return;
+    }
+
+    if (
+      !window.confirm("確認此筆租板費用已補繳？")
+    ) {
+      return;
+    }
+
+    setUpdatingPaymentRegistrationId(registration.id);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("mark_rental_registration_paid", {
+      target_registration_id: registration.id,
+    });
 
     setUpdatingPaymentRegistrationId(null);
 
     if (error) {
-      setStatusMessage(`更新繳費狀態失敗：${error.message}`);
+      setStatusMessage(`補繳標記失敗：${error.message}`);
       return;
     }
 
-    setRentalRegistrations((current) =>
-      current.map((item) =>
-        item.id === registration.id ? { ...item, is_paid: isPaid } : item
-      )
-    );
-    setStatusMessage("繳費狀態已更新。");
+    setStatusMessage("已標記補繳。");
+    await loadRentalData();
   };
 
   return (
@@ -901,7 +1020,7 @@ export default function RentalsPage() {
                 )}
               </Card>
 
-              <div>
+              <div className="grid gap-6">
                 {selectedSlot ? (
                   <RentalSlotDetail
                     slot={selectedSlot}
@@ -914,8 +1033,9 @@ export default function RentalsPage() {
                     getPublicProfileById={getPublicProfileById}
                     myRegistration={getMyRegistration(selectedSlot.id)}
                     isFull={isSlotFull(selectedSlot)}
+                    myUnpaidCount={myUnpaidCount}
                     canManageSlots={canManageSlots}
-                    canManagePayments={canManagePayments}
+                    canMarkPaid={canMarkPaid}
                     updatingRentalSlotId={updatingRentalSlotId}
                     deletingRentalSlotId={deletingRentalSlotId}
                     savingRegistrationSlotId={savingRegistrationSlotId}
@@ -936,6 +1056,20 @@ export default function RentalsPage() {
                       請從日曆選擇一個租板時段查看詳細資料。
                     </p>
                   </Card>
+                )}
+
+                {canViewUnpaid && (
+                  <UnpaidRentalsTable
+                    unpaidRegistrations={unpaidRegistrations}
+                    rentalSlots={rentalSlots}
+                    getPublicProfileById={getPublicProfileById}
+                    getResponsibleProfileById={getResponsibleProfileById}
+                    canMarkPaid={canMarkPaid}
+                    updatingPaymentRegistrationId={
+                      updatingPaymentRegistrationId
+                    }
+                    onMarkPaid={handleMarkUnpaidAsPaid}
+                  />
                 )}
               </div>
             </section>
@@ -964,8 +1098,9 @@ function RentalSlotDetail({
   getPublicProfileById,
   myRegistration,
   isFull,
+  myUnpaidCount,
   canManageSlots,
-  canManagePayments,
+  canMarkPaid,
   updatingRentalSlotId,
   deletingRentalSlotId,
   savingRegistrationSlotId,
@@ -984,8 +1119,9 @@ function RentalSlotDetail({
   getPublicProfileById: (profileId: string | null) => PublicMemberProfile | null;
   myRegistration: RentalRegistration | null;
   isFull: boolean;
+  myUnpaidCount: number;
   canManageSlots: boolean;
-  canManagePayments: boolean;
+  canMarkPaid: boolean;
   updatingRentalSlotId: string | null;
   deletingRentalSlotId: string | null;
   savingRegistrationSlotId: string | null;
@@ -1000,12 +1136,22 @@ function RentalSlotDetail({
   ) => Promise<void>;
 }) {
   const meetsLevel = userMeetsSurfLevel(profile, slot.min_surf_level);
+  const slotStarted = hasRentalSlotStarted(slot);
+  const blockedByUnpaid = myUnpaidCount >= 2;
   const canRegister =
-    slot.is_open && !isFull && !myRegistration && meetsLevel;
+    slot.is_open &&
+    !isFull &&
+    !myRegistration &&
+    meetsLevel &&
+    !blockedByUnpaid;
   const registrationRows = Array.from(
     { length: Math.max(slot.capacity, registrations.length) },
     (_, index) => registrations[index] ?? null
   );
+
+  const canCancelRegistration = (registration: RentalRegistration) =>
+    !slotStarted &&
+    (registration.user_id === userId || canManageSlots);
 
   return (
     <Card>
@@ -1157,7 +1303,7 @@ function RentalSlotDetail({
                       {registration ? (
                         <PaymentControl
                           registration={registration}
-                          canManagePayments={canManagePayments}
+                          canMarkPaid={canMarkPaid}
                           updatingPaymentRegistrationId={
                             updatingPaymentRegistrationId
                           }
@@ -1168,8 +1314,7 @@ function RentalSlotDetail({
                       )}
                     </td>
                     <td className="px-3 py-3">
-                      {registration &&
-                      (registration.user_id === userId || canManageSlots) ? (
+                      {registration && canCancelRegistration(registration) ? (
                         <button
                           type="button"
                           onClick={() => void onCancelRegistration(registration)}
@@ -1179,6 +1324,12 @@ function RentalSlotDetail({
                           <X size={14} />
                           取消登記
                         </button>
+                      ) : registration &&
+                        registration.user_id === userId &&
+                        slotStarted ? (
+                        <span className="text-xs text-slate-500">
+                          租板時段已開始，無法取消
+                        </span>
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
@@ -1219,17 +1370,17 @@ function RentalSlotDetail({
                 </div>
 
                 {registration && (
-                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
                     <PaymentControl
                       registration={registration}
-                      canManagePayments={canManagePayments}
+                      canMarkPaid={canMarkPaid}
                       updatingPaymentRegistrationId={
                         updatingPaymentRegistrationId
                       }
                       onTogglePayment={onTogglePayment}
                     />
 
-                    {(registration.user_id === userId || canManageSlots) && (
+                    {canCancelRegistration(registration) ? (
                       <button
                         type="button"
                         onClick={() => void onCancelRegistration(registration)}
@@ -1239,7 +1390,11 @@ function RentalSlotDetail({
                         <X size={14} />
                         取消登記
                       </button>
-                    )}
+                    ) : registration.user_id === userId && slotStarted ? (
+                      <span className="text-xs text-slate-500">
+                        租板時段已開始，無法取消
+                      </span>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1250,16 +1405,24 @@ function RentalSlotDetail({
 
       <div className="mt-5">
         {myRegistration ? (
-          <Button
-            variant="danger"
-            fullWidth
-            className="sm:w-auto"
-            icon={<X size={16} />}
-            onClick={() => void onCancelRegistration(myRegistration)}
-            disabled={savingRegistrationSlotId === slot.id}
-          >
-            {savingRegistrationSlotId === slot.id ? "取消中..." : "取消我的登記"}
-          </Button>
+          slotStarted ? (
+            <div className="rounded-xl border border-warning/30 bg-warning-light px-3 py-2 text-sm text-slate-700">
+              租板時段已開始，無法取消
+            </div>
+          ) : (
+            <Button
+              variant="danger"
+              fullWidth
+              className="sm:w-auto"
+              icon={<X size={16} />}
+              onClick={() => void onCancelRegistration(myRegistration)}
+              disabled={savingRegistrationSlotId === slot.id}
+            >
+              {savingRegistrationSlotId === slot.id
+                ? "取消中..."
+                : "取消我的登記"}
+            </Button>
+          )
         ) : (
           <Button
             variant="primary"
@@ -1273,6 +1436,20 @@ function RentalSlotDetail({
         )}
 
         <div className="mt-3 flex flex-col gap-1.5">
+          {!myRegistration && myUnpaidCount === 1 && (
+            <p className="flex items-center gap-1.5 text-xs text-warning">
+              <Info size={13} />
+              您目前租板未繳費 1/2
+            </p>
+          )}
+
+          {!myRegistration && myUnpaidCount >= 2 && (
+            <p className="flex items-center gap-1.5 text-xs text-danger">
+              <Info size={13} />
+              您目前租板未繳費 {myUnpaidCount}/2，請先完成補繳後再租板
+            </p>
+          )}
+
           {!slot.is_open && (
             <p className="flex items-center gap-1.5 text-xs text-slate-500">
               <Info size={13} />
@@ -1299,14 +1476,187 @@ function RentalSlotDetail({
   );
 }
 
+function UnpaidRentalsTable({
+  unpaidRegistrations,
+  rentalSlots,
+  getPublicProfileById,
+  getResponsibleProfileById,
+  canMarkPaid,
+  updatingPaymentRegistrationId,
+  onMarkPaid,
+}: {
+  unpaidRegistrations: RentalRegistration[];
+  rentalSlots: RentalSlot[];
+  getPublicProfileById: (profileId: string | null) => PublicMemberProfile | null;
+  getResponsibleProfileById: (
+    profileId: string | null
+  ) => ResponsibleProfile | PublicMemberProfile | null;
+  canMarkPaid: boolean;
+  updatingPaymentRegistrationId: string | null;
+  onMarkPaid: (registration: RentalRegistration) => Promise<void>;
+}) {
+  return (
+    <Card>
+      <div className="mb-4 flex items-center gap-2">
+        <Wallet size={18} className="text-warning" />
+        <h2 className="font-semibold text-slate-900">租板未繳費資訊</h2>
+      </div>
+
+      {unpaidRegistrations.length === 0 ? (
+        <p className="text-sm text-slate-500">目前沒有未繳費紀錄</p>
+      ) : (
+        <>
+          <div className="hidden max-h-80 overflow-auto rounded-xl border border-border md:block">
+            <table className="w-full min-w-[560px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-border bg-bg text-xs text-slate-500">
+                  <th className="px-3 py-2 font-medium">未付款的人</th>
+                  <th className="px-3 py-2 font-medium">負責板務</th>
+                  <th className="px-3 py-2 font-medium">日期</th>
+                  <th className="px-3 py-2 font-medium">補繳</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unpaidRegistrations.map((registration) => {
+                  const slot = rentalSlots.find(
+                    (item) => item.id === registration.rental_slot_id
+                  );
+                  const renter = getPublicProfileById(registration.user_id);
+                  const boardManager = getResponsibleProfileById(
+                    slot?.board_manager_id ?? null
+                  );
+                  const managerInfo = formatResponsiblePerson(
+                    boardManager,
+                    "未指定"
+                  );
+
+                  return (
+                    <tr
+                      key={registration.id}
+                      className="border-b border-border last:border-b-0"
+                    >
+                      <td className="px-3 py-3">
+                        <p className="font-medium text-slate-800">
+                          {renter?.full_name || "未填姓名"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {renter?.student_id || "未填學號"}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">
+                        {typeof managerInfo === "string"
+                          ? managerInfo
+                          : managerInfo.name}
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">
+                        {slot ? (
+                          <>
+                            <p>{formatShortDate(slot.rental_date)}</p>
+                            <p className="text-xs text-slate-500">
+                              {formatTime(slot.start_time)}–
+                              {formatTime(slot.end_time)}
+                            </p>
+                          </>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        {canMarkPaid ? (
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            disabled={
+                              updatingPaymentRegistrationId === registration.id
+                            }
+                            onChange={() => void onMarkPaid(registration)}
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary disabled:cursor-not-allowed"
+                            aria-label="標記補繳"
+                          />
+                        ) : (
+                          <span className="text-xs text-warning">未繳費</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid max-h-80 gap-3 overflow-y-auto md:hidden">
+            {unpaidRegistrations.map((registration) => {
+              const slot = rentalSlots.find(
+                (item) => item.id === registration.rental_slot_id
+              );
+              const renter = getPublicProfileById(registration.user_id);
+              const boardManager = getResponsibleProfileById(
+                slot?.board_manager_id ?? null
+              );
+              const managerInfo = formatResponsiblePerson(
+                boardManager,
+                "未指定"
+              );
+
+              return (
+                <div
+                  key={registration.id}
+                  className="rounded-xl border border-border bg-bg p-3"
+                >
+                  <p className="font-medium text-slate-800">
+                    {renter?.full_name || "未填姓名"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    學號：{renter?.student_id || "未填學號"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    負責板務：
+                    {typeof managerInfo === "string"
+                      ? managerInfo
+                      : managerInfo.name}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    日期：
+                    {slot
+                      ? `${formatShortDate(slot.rental_date)} ${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`
+                      : "-"}
+                  </p>
+                  <div className="mt-3 border-t border-border pt-3">
+                    {canMarkPaid ? (
+                      <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          disabled={
+                            updatingPaymentRegistrationId === registration.id
+                          }
+                          onChange={() => void onMarkPaid(registration)}
+                          className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary"
+                        />
+                        補繳
+                      </label>
+                    ) : (
+                      <span className="text-xs text-warning">未繳費</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function PaymentControl({
   registration,
-  canManagePayments,
+  canMarkPaid,
   updatingPaymentRegistrationId,
   onTogglePayment,
 }: {
   registration: RentalRegistration;
-  canManagePayments: boolean;
+  canMarkPaid: boolean;
   updatingPaymentRegistrationId: string | null;
   onTogglePayment: (
     registration: RentalRegistration,
@@ -1319,8 +1669,7 @@ function PaymentControl({
         type="checkbox"
         checked={registration.is_paid}
         disabled={
-          !canManagePayments ||
-          updatingPaymentRegistrationId === registration.id
+          !canMarkPaid || updatingPaymentRegistrationId === registration.id
         }
         onChange={(event) =>
           void onTogglePayment(registration, event.target.checked)

@@ -52,6 +52,8 @@ export type RentalRegistration = {
   rental_slot_id: string;
   user_id: string;
   is_paid: boolean;
+  paid_at?: string | null;
+  paid_by?: string | null;
   created_at: string;
   updated_at: string;
 };
