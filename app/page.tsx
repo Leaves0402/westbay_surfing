@@ -8,6 +8,7 @@ import {
   Info,
   Lock,
   Mail,
+  MapPin,
   Megaphone,
   RefreshCw,
   ShieldCheck,
@@ -28,6 +29,7 @@ import {
   canViewAnnouncements,
   canViewMembers,
   canViewRentals,
+  canViewSurfTrips,
 } from "@/lib/permissions";
 import { roleLabels } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
@@ -36,6 +38,7 @@ const featureIcons = {
   "/profile": UserRound,
   "/announcements": Megaphone,
   "/rentals": Waves,
+  "/trips": MapPin,
   "/admin/members": Users,
 } as const;
 
@@ -69,6 +72,12 @@ export default function Home() {
         ? "查看、登記與管理租板時段。"
         : "查看可租板時段並登記。",
       visible: canViewRentals(profile),
+    },
+    {
+      href: "/trips",
+      title: "揪外衝",
+      description: "發起外衝活動、選擇浪點，並查看目前行程。",
+      visible: canViewSurfTrips(profile),
     },
     {
       href: "/admin/members",

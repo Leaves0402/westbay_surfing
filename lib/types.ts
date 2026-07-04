@@ -56,6 +56,33 @@ export type RentalRegistration = {
   updated_at: string;
 };
 
+export type SurfSpot = {
+  id: string;
+  name: string;
+  county: string;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type SurfTrip = {
+  id: string;
+  start_date: string;
+  end_date: string;
+  capacity: number;
+  leader_id: string;
+  min_surf_level: string | null;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SurfTripSpot = {
+  trip_id: string;
+  spot_id: string;
+};
+
 export const profileSelectColumns =
   "id, email, full_name, student_id, surf_level, requested_surf_level, requested_surf_level_at, role, created_at";
 

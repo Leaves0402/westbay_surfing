@@ -15,7 +15,7 @@ const tabs: TabItem[] = [
   { href: "/", label: "首頁", icon: Home },
   { href: "/announcements", label: "公告", icon: Megaphone },
   { href: "/rentals", label: "租板", icon: Waves },
-  { href: "/rentals", label: "揪衝", icon: Users, disabled: true },
+  { href: "/trips", label: "揪衝", icon: Users },
   { href: "/profile", label: "我的", icon: User },
 ];
 

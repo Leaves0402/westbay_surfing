@@ -13,6 +13,7 @@ import {
   canViewAnnouncements,
   canViewMembers,
   canViewRentals,
+  canViewSurfTrips,
 } from "@/lib/permissions";
 
 type NavbarProps = {
@@ -40,6 +41,9 @@ export function Navbar({
       ? [{ href: "/announcements", label: "公告" }]
       : []),
     ...(canViewRentals(profile) ? [{ href: "/rentals", label: "租板" }] : []),
+    ...(canViewSurfTrips(profile)
+      ? [{ href: "/trips", label: "揪外衝" }]
+      : []),
     ...(canViewMembers(profile)
       ? [{ href: "/admin/members", label: "社員名單" }]
       : []),

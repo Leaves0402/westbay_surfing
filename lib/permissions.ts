@@ -72,6 +72,18 @@ export function canReviewSurfLevelRequests(input: RoleInput) {
   return canManageMembers(input);
 }
 
+export function canViewSurfTrips(input: RoleInput) {
+  return canUseMemberFeatures(input);
+}
+
+export function canCreateSurfTrips(input: RoleInput) {
+  return canUseMemberFeatures(input);
+}
+
+export function canManageSurfTripLeaders(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
 export function getSurfLevelRank(level: string | null | undefined) {
   if (!level) return 0;
   return surfLevelRanks[level as SurfLevel] ?? 0;
