@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { fieldControlClasses } from "@/components/ui/FormField";
@@ -28,6 +28,7 @@ export function SpotMultiSelect({
   onCreateSpot,
   disabled = false,
 }: SpotMultiSelectProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -57,6 +58,22 @@ export function SpotMultiSelect({
       );
     });
   }, [query, spots]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (containerRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isOpen]);
 
   const toggleSpot = (spotId: string) => {
     if (disabled) return;
@@ -102,7 +119,7 @@ export function SpotMultiSelect({
   };
 
   return (
-    <div className="space-y-2">
+    <div ref={containerRef} className="space-y-2">
       {selectedSpots.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {selectedSpots.map((spot) => (
@@ -142,58 +159,61 @@ export function SpotMultiSelect({
           className={`${fieldControlClasses} pl-9`}
           disabled={disabled}
         />
-      </div>
 
-      {isOpen && (
-        <div className="max-h-56 overflow-y-auto rounded-xl border border-line bg-surface shadow-sm">
-          {filteredSpots.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-text-secondary">
-              找不到符合的浪點。
-            </p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {filteredSpots.map((spot) => {
-                const checked = selectedSpotIds.includes(spot.id);
-                return (
-                  <li key={spot.id}>
-                    <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-appBg">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSpot(spot.id)}
-                        disabled={disabled}
-                        className="h-4 w-4 rounded border-line text-primary focus:ring-2 focus:ring-primary"
-                      />
-                      <span className="text-text-primary">
-                        {formatSpotLabel(spot)}
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+        {isOpen && (
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <div className="max-h-[132px] overflow-y-auto">
+              {filteredSpots.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-text-secondary">
+                  找不到符合的浪點。
+                </p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {filteredSpots.map((spot) => {
+                    const checked = selectedSpotIds.includes(spot.id);
+                    return (
+                      <li key={spot.id}>
+                        <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-appBg">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleSpot(spot.id)}
+                            disabled={disabled}
+                            className="h-4 w-4 rounded border-line text-primary focus:ring-2 focus:ring-primary"
+                          />
+                          <span className="text-text-primary">
+                            {formatSpotLabel(spot)}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
 
-          <div className="border-t border-line p-2">
-            <Button
-              type="button"
-              variant="outline"
-              fullWidth
-              className="!min-h-9 !text-xs"
-              icon={<Plus size={14} />}
-              onClick={() => {
-                setShowCreateForm(true);
-                if (query.trim()) {
-                  setNewSpotName(query.trim());
-                }
-              }}
-              disabled={disabled}
-            >
-              新增浪點
-            </Button>
+            <div className="border-t border-line p-2">
+              <Button
+                type="button"
+                variant="outline"
+                fullWidth
+                className="!min-h-9 !text-xs"
+                icon={<Plus size={14} />}
+                onClick={() => {
+                  setShowCreateForm(true);
+                  setIsOpen(false);
+                  if (query.trim()) {
+                    setNewSpotName(query.trim());
+                  }
+                }}
+                disabled={disabled}
+              >
+                新增浪點
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {showCreateForm && (
         <div className="rounded-xl border border-line bg-appBg p-3">

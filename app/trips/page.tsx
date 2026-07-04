@@ -25,11 +25,7 @@ import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { getRoleTone } from "@/lib/badgeTones";
-import {
-  canCreateSurfTrips,
-  canManageSurfTripLeaders,
-  canViewSurfTrips,
-} from "@/lib/permissions";
+import { canCreateSurfTrips, canViewSurfTrips } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import {
   roleLabels,
@@ -114,13 +110,11 @@ export default function TripsPage() {
   const [endDate, setEndDate] = useState(getTodayDate());
   const [selectedSpotIds, setSelectedSpotIds] = useState<string[]>([]);
   const [capacity, setCapacity] = useState("5");
-  const [leaderId, setLeaderId] = useState("");
   const [minSurfLevel, setMinSurfLevel] = useState("");
   const [note, setNote] = useState("");
 
   const canView = canViewSurfTrips(profile);
   const canCreate = canCreateSurfTrips(profile);
-  const canPickLeader = canManageSurfTripLeaders(profile);
 
   const getMemberName = useCallback(
     (memberId: string) => {
@@ -140,10 +134,9 @@ export default function TripsPage() {
     setEndDate(today);
     setSelectedSpotIds([]);
     setCapacity("5");
-    setLeaderId(user?.id ?? "");
     setMinSurfLevel("");
     setNote("");
-  }, [user?.id]);
+  }, []);
 
   const loadTripData = useCallback(async () => {
     setIsLoadingTrips(true);
@@ -264,11 +257,6 @@ export default function TripsPage() {
     queueMicrotask(() => void loadTripData());
   }, [canView, loadTripData]);
 
-  useEffect(() => {
-    if (!user) return;
-    setLeaderId((current) => current || user.id);
-  }, [user]);
-
   const handleCreateSpot = async ({
     name,
     county,
@@ -386,8 +374,6 @@ export default function TripsPage() {
       return;
     }
 
-    const resolvedLeaderId = canPickLeader ? leaderId || user.id : user.id;
-
     setIsCreatingTrip(true);
     setStatusMessage("");
 
@@ -398,7 +384,7 @@ export default function TripsPage() {
         start_date: startDate,
         end_date: endDate,
         capacity: capacityValue,
-        leader_id: resolvedLeaderId,
+        leader_id: user.id,
         min_surf_level: minSurfLevel || null,
         note: note.trim() || null,
         created_by: user.id,
@@ -767,29 +753,6 @@ export default function TripsPage() {
                       onChange={(event) => setCapacity(event.target.value)}
                       className={fieldControlClasses}
                     />
-                  </FormField>
-
-                  <FormField label="負責人">
-                    {canPickLeader ? (
-                      <select
-                        value={leaderId}
-                        onChange={(event) => setLeaderId(event.target.value)}
-                        className={fieldControlClasses}
-                      >
-                        {memberProfiles.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {roleLabels[member.role]}（
-                            {member.full_name || "未填姓名"}）
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div
-                        className={`${fieldControlClasses} flex items-center bg-appBg text-text-secondary`}
-                      >
-                        {profile?.full_name || user.email || "目前登入者"}
-                      </div>
-                    )}
                   </FormField>
 
                   <FormField label="程度限制">
