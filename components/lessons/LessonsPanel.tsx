@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BookOpen, Plus, RefreshCw } from "lucide-react";
+import { InstructorMultiSelect } from "@/components/lessons/InstructorMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
-import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import {
   addHoursToTime,
   formatLessonLabel,
@@ -13,12 +13,13 @@ import {
 } from "@/lib/lessonTime";
 import { canManageLessons } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
-import type {
-  Lesson,
-  LessonInstructor,
-  LessonParticipant,
-  Profile,
-  PublicMemberProfile,
+import {
+  roleLabels,
+  type Lesson,
+  type LessonInstructor,
+  type LessonParticipant,
+  type Profile,
+  type PublicMemberProfile,
 } from "@/lib/types";
 
 type LessonCardData = Lesson & {
@@ -161,14 +162,6 @@ export function LessonsPanel({
     setNote("");
   };
 
-  const toggleInstructor = (instructorId: string) => {
-    setSelectedInstructorIds((current) =>
-      current.includes(instructorId)
-        ? current.filter((id) => id !== instructorId)
-        : [...current, instructorId]
-    );
-  };
-
   const handleCreateLesson = async () => {
     if (!canManage) {
       onStatusMessage("只有幹部與管理員可以新增社課。");
@@ -192,7 +185,7 @@ export function LessonsPanel({
     }
 
     if (selectedInstructorIds.length === 0) {
-      onStatusMessage("請至少選擇一位教學。");
+      onStatusMessage("請選擇至少一位教學");
       return;
     }
 
@@ -281,6 +274,37 @@ export function LessonsPanel({
     await loadLessons();
   };
 
+  const handleDeleteLesson = async (lessonId: string) => {
+    if (!canManage) {
+      onStatusMessage("只有幹部與管理員可以取消社課。");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "確定要取消此社課嗎？該次報名、備取與簽到紀錄都會被刪除，此操作無法復原。"
+      )
+    ) {
+      return;
+    }
+
+    setActingLessonId(lessonId);
+    onStatusMessage("");
+    const supabase = createClient();
+    const { error } = await supabase.rpc("delete_lesson", {
+      target_lesson_id: lessonId,
+    });
+    setActingLessonId(null);
+
+    if (error) {
+      onStatusMessage(`取消社課失敗：${error.message}`);
+      return;
+    }
+
+    onStatusMessage("社課已取消。");
+    await loadLessons();
+  };
+
   return (
     <div className="grid gap-6">
       {canManage && (
@@ -339,23 +363,12 @@ export function LessonsPanel({
 
             <div className="sm:col-span-2">
               <p className="mb-2 text-sm font-medium text-slate-700">教學</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {instructors.map((instructor) => (
-                  <label
-                    key={instructor.id}
-                    className="flex min-h-11 items-center gap-2 rounded-xl border border-line bg-appBg px-3 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedInstructorIds.includes(instructor.id)}
-                      onChange={() => toggleInstructor(instructor.id)}
-                      className="h-4 w-4 rounded border-line text-primary focus:ring-2 focus:ring-primary"
-                    />
-                    <span>{instructor.full_name || "未填姓名"}</span>
-                    <SurfLevelBadge level={instructor.surf_level} />
-                  </label>
-                ))}
-              </div>
+              <InstructorMultiSelect
+                instructors={instructors}
+                selectedIds={selectedInstructorIds}
+                onChange={setSelectedInstructorIds}
+                disabled={isCreating}
+              />
             </div>
 
             <FormField label="備註" className="sm:col-span-2">
@@ -424,7 +437,10 @@ export function LessonsPanel({
                 lesson.start_time
               );
               const instructorNames = lesson.instructors
-                .map((item) => item.full_name || "未填姓名")
+                .map(
+                  (item) =>
+                    `${roleLabels[item.role]}（${item.full_name || "未填姓名"}）`
+                )
                 .join("、");
 
               return (
@@ -432,14 +448,28 @@ export function LessonsPanel({
                   key={lesson.id}
                   className="rounded-xl border border-line bg-appBg p-4"
                 >
-                  <p className="font-semibold text-text-primary">
-                    社課｜
-                    {formatLessonLabel(
-                      lesson.lesson_date,
-                      lesson.start_time,
-                      lesson.end_time
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="font-semibold text-text-primary">
+                      社課｜
+                      {formatLessonLabel(
+                        lesson.lesson_date,
+                        lesson.start_time,
+                        lesson.end_time
+                      )}
+                    </p>
+                    {canManage && (
+                      <Button
+                        variant="danger"
+                        className="!min-h-8 !px-2.5 !text-xs"
+                        disabled={actingLessonId === lesson.id}
+                        onClick={() => void handleDeleteLesson(lesson.id)}
+                      >
+                        {actingLessonId === lesson.id
+                          ? "取消中..."
+                          : "取消社課"}
+                      </Button>
                     )}
-                  </p>
+                  </div>
                   <p className="mt-1 text-sm text-text-secondary">
                     教學：{instructorNames || "未指定"}
                   </p>

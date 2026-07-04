@@ -10,6 +10,7 @@ import {
 import { Navbar } from "@/components/Navbar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
@@ -60,23 +61,12 @@ export default function AttendancePage() {
   >([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [isCheckingInAll, setIsCheckingInAll] = useState(false);
 
   const selectedLesson =
     lessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
 
-  const isLessonInstructor = useMemo(
-    () =>
-      Boolean(
-        user &&
-          selectedLessonId &&
-          instructors.some(
-            (item) =>
-              item.lesson_id === selectedLessonId &&
-              item.instructor_id === user.id
-          )
-      ),
-    [instructors, selectedLessonId, user]
-  );
+  const canOperateAttendance = canView;
 
   const membersById = useMemo(
     () => new Map(members.map((member) => [member.id, member])),
@@ -269,7 +259,7 @@ export default function AttendancePage() {
     instructorId: string,
     checked: boolean
   ) => {
-    if (!selectedLessonId || !isLessonInstructor) return;
+    if (!selectedLessonId || !canOperateAttendance) return;
     setSavingKey(`instructor-${instructorId}`);
     const supabase = createClient();
     const { error } = await supabase.rpc("set_lesson_instructor_attendance", {
@@ -286,7 +276,7 @@ export default function AttendancePage() {
   };
 
   const toggleMemberAttendance = async (userId: string, checked: boolean) => {
-    if (!selectedLessonId || !isLessonInstructor) return;
+    if (!selectedLessonId || !canOperateAttendance) return;
     setSavingKey(`member-${userId}`);
     const supabase = createClient();
     const { error } = await supabase.rpc("set_lesson_member_attendance", {
@@ -299,6 +289,30 @@ export default function AttendancePage() {
       setStatusMessage(`更新社員簽到失敗：${error.message}`);
       return;
     }
+    await loadData();
+  };
+
+  const handleCheckInAllInstructors = async () => {
+    if (!selectedLessonId || !canOperateAttendance) return;
+
+    if (!window.confirm("確定要將所有教學標記為出席嗎？")) {
+      return;
+    }
+
+    setIsCheckingInAll(true);
+    setStatusMessage("");
+    const supabase = createClient();
+    const { error } = await supabase.rpc("check_in_all_lesson_instructors", {
+      target_lesson_id: selectedLessonId,
+    });
+    setIsCheckingInAll(false);
+
+    if (error) {
+      setStatusMessage(`一鍵簽到失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已將所有教學標記為出席。");
     await loadData();
   };
 
@@ -394,15 +408,25 @@ export default function AttendancePage() {
                   />
                 </button>
               </div>
-              {!isLessonInstructor && selectedLesson && (
-                <p className="mt-3 text-xs text-text-secondary">
-                  你不是本堂教學，可查看統計，但無法操作簽到。
-                </p>
-              )}
             </Card>
 
             <Card>
-              <h2 className="mb-3 font-semibold">教學出席</h2>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-semibold">教學出席</h2>
+                {canOperateAttendance && selectedLesson && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="!min-h-9 !px-3 !text-xs"
+                    onClick={() => void handleCheckInAllInstructors()}
+                    disabled={
+                      isCheckingInAll || lessonInstructors.length === 0
+                    }
+                  >
+                    {isCheckingInAll ? "簽到中..." : "一鍵簽到"}
+                  </Button>
+                )}
+              </div>
               {lessonInstructors.length === 0 ? (
                 <p className="text-sm text-text-secondary">本堂沒有教學名單。</p>
               ) : (
@@ -430,7 +454,7 @@ export default function AttendancePage() {
                                 type="checkbox"
                                 checked={Boolean(attendance?.checked_in)}
                                 disabled={
-                                  !isLessonInstructor ||
+                                  !canOperateAttendance ||
                                   savingKey === `instructor-${instructor.id}`
                                 }
                                 onChange={(event) =>
@@ -488,7 +512,7 @@ export default function AttendancePage() {
                                 type="checkbox"
                                 checked={Boolean(attendance?.checked_in)}
                                 disabled={
-                                  !isLessonInstructor ||
+                                  !canOperateAttendance ||
                                   savingKey === `member-${participant.user_id}`
                                 }
                                 onChange={(event) =>
