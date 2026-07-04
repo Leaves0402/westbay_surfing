@@ -83,6 +83,24 @@ export type SurfTripSpot = {
   spot_id: string;
 };
 
+export type SurfTripCar = {
+  id: string;
+  trip_id: string;
+  leader_id: string;
+  capacity: number;
+  created_by: string;
+  created_at: string;
+};
+
+export type SurfTripCarPassenger = {
+  id: string;
+  car_id: string;
+  trip_id: string;
+  user_id: string;
+  slot_index: number;
+  created_at: string;
+};
+
 export const profileSelectColumns =
   "id, email, full_name, student_id, surf_level, requested_surf_level, requested_surf_level_at, role, created_at";
 

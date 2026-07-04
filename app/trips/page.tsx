@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CalendarRange,
   Info,
@@ -12,7 +12,10 @@ import {
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { SpotMultiSelect, formatSpotLabel } from "@/components/trips/SpotMultiSelect";
-import { TripCapacityPreview } from "@/components/trips/TripCapacityPreview";
+import {
+  TripConvoy,
+  type TripCarWithPassengers,
+} from "@/components/trips/TripConvoy";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -32,12 +35,15 @@ import {
   type PublicMemberProfile,
   type SurfSpot,
   type SurfTrip,
+  type SurfTripCar,
+  type SurfTripCarPassenger,
   type SurfTripSpot,
 } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
 
-type TripWithSpots = SurfTrip & {
+type TripWithDetails = SurfTrip & {
   spots: SurfSpot[];
+  cars: TripCarWithPassengers[];
 };
 
 function getTodayDate() {
@@ -80,12 +86,19 @@ export default function TripsPage() {
   } = useAuthProfile();
 
   const [spots, setSpots] = useState<SurfSpot[]>([]);
-  const [trips, setTrips] = useState<TripWithSpots[]>([]);
+  const [trips, setTrips] = useState<TripWithDetails[]>([]);
   const [memberProfiles, setMemberProfiles] = useState<PublicMemberProfile[]>(
     []
   );
   const [isLoadingTrips, setIsLoadingTrips] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
+  const [joiningKey, setJoiningKey] = useState<string | null>(null);
+  const [leavingPassengerId, setLeavingPassengerId] = useState<string | null>(
+    null
+  );
+  const [addingCarTripId, setAddingCarTripId] = useState<string | null>(null);
+  const [newCarCapacity, setNewCarCapacity] = useState("3");
+  const [isAddingCar, setIsAddingCar] = useState(false);
 
   const [startDate, setStartDate] = useState(getTodayDate());
   const [endDate, setEndDate] = useState(getTodayDate());
@@ -98,11 +111,6 @@ export default function TripsPage() {
   const canView = canViewSurfTrips(profile);
   const canCreate = canCreateSurfTrips(profile);
   const canPickLeader = canManageSurfTripLeaders(profile);
-
-  const capacityNumber = useMemo(() => {
-    const value = Number(capacity);
-    return Number.isInteger(value) && value >= 0 ? value : 0;
-  }, [capacity]);
 
   const getMemberName = useCallback(
     (memberId: string) => {
@@ -132,25 +140,39 @@ export default function TripsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const [spotsResult, tripsResult, tripSpotsResult, membersResult] =
-      await Promise.all([
-        supabase
-          .from("surf_spots")
-          .select("id, name, county, sort_order, created_by, created_at")
-          .order("sort_order", { ascending: true })
-          .order("name", { ascending: true }),
-        supabase
-          .from("surf_trips")
-          .select(
-            "id, start_date, end_date, capacity, leader_id, min_surf_level, note, created_by, created_at, updated_at"
-          )
-          .order("start_date", { ascending: true })
-          .order("created_at", { ascending: false }),
-        supabase.from("surf_trip_spots").select("trip_id, spot_id"),
-        supabase
-          .from("public_member_profiles")
-          .select("id, full_name, student_id, surf_level, role"),
-      ]);
+    const [
+      spotsResult,
+      tripsResult,
+      tripSpotsResult,
+      carsResult,
+      passengersResult,
+      membersResult,
+    ] = await Promise.all([
+      supabase
+        .from("surf_spots")
+        .select("id, name, county, sort_order, created_by, created_at")
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }),
+      supabase
+        .from("surf_trips")
+        .select(
+          "id, start_date, end_date, capacity, leader_id, min_surf_level, note, created_by, created_at, updated_at"
+        )
+        .order("start_date", { ascending: true })
+        .order("created_at", { ascending: false }),
+      supabase.from("surf_trip_spots").select("trip_id, spot_id"),
+      supabase
+        .from("surf_trip_cars")
+        .select("id, trip_id, leader_id, capacity, created_by, created_at")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("surf_trip_car_passengers")
+        .select("id, car_id, trip_id, user_id, slot_index, created_at")
+        .order("slot_index", { ascending: true }),
+      supabase
+        .from("public_member_profiles")
+        .select("id, full_name, student_id, surf_level, role"),
+    ]);
 
     setIsLoadingTrips(false);
 
@@ -169,6 +191,16 @@ export default function TripsPage() {
       return;
     }
 
+    if (carsResult.error) {
+      setStatusMessage(`讀取車隊失敗：${carsResult.error.message}`);
+      return;
+    }
+
+    if (passengersResult.error) {
+      setStatusMessage(`讀取跟車名單失敗：${passengersResult.error.message}`);
+      return;
+    }
+
     if (membersResult.error) {
       setStatusMessage(`讀取社員公開資料失敗：${membersResult.error.message}`);
       return;
@@ -177,19 +209,38 @@ export default function TripsPage() {
     const loadedSpots = (spotsResult.data ?? []) as SurfSpot[];
     const loadedTrips = (tripsResult.data ?? []) as SurfTrip[];
     const loadedTripSpots = (tripSpotsResult.data ?? []) as SurfTripSpot[];
+    const loadedCars = (carsResult.data ?? []) as SurfTripCar[];
+    const loadedPassengers = (passengersResult.data ??
+      []) as SurfTripCarPassenger[];
     const spotsById = new Map(loadedSpots.map((spot) => [spot.id, spot]));
 
-    const tripsWithSpots: TripWithSpots[] = loadedTrips.map((trip) => ({
-      ...trip,
-      spots: loadedTripSpots
-        .filter((item) => item.trip_id === trip.id)
-        .map((item) => spotsById.get(item.spot_id))
-        .filter((spot): spot is SurfSpot => Boolean(spot))
-        .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "zh-Hant")),
-    }));
+    const tripsWithDetails: TripWithDetails[] = loadedTrips.map((trip) => {
+      const tripCars = loadedCars
+        .filter((car) => car.trip_id === trip.id)
+        .map((car) => ({
+          ...car,
+          passengers: loadedPassengers.filter(
+            (passenger) => passenger.car_id === car.id
+          ),
+        }));
+
+      return {
+        ...trip,
+        spots: loadedTripSpots
+          .filter((item) => item.trip_id === trip.id)
+          .map((item) => spotsById.get(item.spot_id))
+          .filter((spot): spot is SurfSpot => Boolean(spot))
+          .sort(
+            (a, b) =>
+              a.sort_order - b.sort_order ||
+              a.name.localeCompare(b.name, "zh-Hant")
+          ),
+        cars: tripCars,
+      };
+    });
 
     setSpots(loadedSpots);
-    setTrips(tripsWithSpots);
+    setTrips(tripsWithDetails);
     setMemberProfiles((membersResult.data ?? []) as PublicMemberProfile[]);
   }, [setStatusMessage]);
 
@@ -216,9 +267,7 @@ export default function TripsPage() {
     }
 
     const existing = spots.find(
-      (spot) =>
-        spot.name === name &&
-        spot.county === county
+      (spot) => spot.name === name && spot.county === county
     );
     if (existing) {
       setStatusMessage("此浪點已存在，已直接選取。");
@@ -317,9 +366,7 @@ export default function TripsPage() {
       return;
     }
 
-    const resolvedLeaderId = canPickLeader
-      ? leaderId || user.id
-      : user.id;
+    const resolvedLeaderId = canPickLeader ? leaderId || user.id : user.id;
 
     setIsCreatingTrip(true);
     setStatusMessage("");
@@ -368,6 +415,107 @@ export default function TripsPage() {
     await loadTripData();
   };
 
+  const handleToggleAddCarForm = (tripId: string) => {
+    setAddingCarTripId((current) => (current === tripId ? null : tripId));
+    setNewCarCapacity("3");
+  };
+
+  const handleConfirmAddCar = async (tripId: string) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    if (!canCreate) {
+      setStatusMessage("只有正式成員可以新增車長。");
+      return;
+    }
+
+    const capacityValue = Number(newCarCapacity);
+    if (!Number.isInteger(capacityValue) || capacityValue < 1) {
+      setStatusMessage("請輸入有效人數。");
+      return;
+    }
+
+    setIsAddingCar(true);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("create_surf_trip_car", {
+      target_trip_id: tripId,
+      target_capacity: capacityValue,
+    });
+
+    setIsAddingCar(false);
+
+    if (error) {
+      setStatusMessage(`新增車長失敗：${error.message}`);
+      return;
+    }
+
+    setAddingCarTripId(null);
+    setNewCarCapacity("3");
+    setStatusMessage("已新增車長。");
+    await loadTripData();
+  };
+
+  const handleJoinSlot = async (carId: string, slotIndex: number) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    if (!canCreate) {
+      setStatusMessage("只有正式成員可以跟車。");
+      return;
+    }
+
+    const joinKey = `${carId}-${slotIndex}`;
+    setJoiningKey(joinKey);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("join_surf_trip_car", {
+      target_car_id: carId,
+      target_slot_index: slotIndex,
+    });
+
+    setJoiningKey(null);
+
+    if (error) {
+      setStatusMessage(`跟車失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已成功跟車。");
+    await loadTripData();
+  };
+
+  const handleLeaveSlot = async (passengerId: string) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    setLeavingPassengerId(passengerId);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("leave_surf_trip_car", {
+      target_passenger_id: passengerId,
+    });
+
+    setLeavingPassengerId(null);
+
+    if (error) {
+      setStatusMessage(`取消跟車失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已取消跟車。");
+    await loadTripData();
+  };
+
   return (
     <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
       <Navbar
@@ -387,7 +535,7 @@ export default function TripsPage() {
             <div>
               <h1 className="text-2xl font-bold text-text-primary">揪外衝</h1>
               <p className="mt-1 text-sm text-text-secondary">
-                正式成員可以發起外衝活動、選擇浪點，並查看目前已建立的行程。
+                正式成員可以發起外衝、新增車長，並在車廂中跟車。
               </p>
             </div>
           </div>
@@ -479,7 +627,7 @@ export default function TripsPage() {
                     </span>
                   </div>
 
-                  <FormField label="人數上限" hint="不包含負責人">
+                  <FormField label="人數上限" hint="不包含負責人（第一台車跟車名額）">
                     <input
                       type="number"
                       min="1"
@@ -537,10 +685,6 @@ export default function TripsPage() {
                   </FormField>
                 </div>
 
-                <div className="mt-4">
-                  <TripCapacityPreview capacity={capacityNumber} />
-                </div>
-
                 <Button
                   variant="primary"
                   fullWidth
@@ -587,6 +731,14 @@ export default function TripsPage() {
                     const leader = memberProfiles.find(
                       (member) => member.id === trip.leader_id
                     );
+                    const totalCapacity = trip.cars.reduce(
+                      (sum, car) => sum + car.capacity,
+                      0
+                    );
+                    const totalPassengers = trip.cars.reduce(
+                      (sum, car) => sum + car.passengers.length,
+                      0
+                    );
 
                     return (
                       <div
@@ -609,7 +761,7 @@ export default function TripsPage() {
                           </div>
                           <span className="inline-flex items-center gap-1 rounded-full bg-primary-light px-2.5 py-1 text-xs font-medium text-primary">
                             <Users size={12} />
-                            {trip.capacity} 人
+                            已跟 {totalPassengers} / {totalCapacity}
                           </span>
                         </div>
 
@@ -628,7 +780,8 @@ export default function TripsPage() {
                             )}
                           </p>
                           <p>
-                            人數上限：{trip.capacity} 人（不含負責人）
+                            人數上限：{totalCapacity || trip.capacity}{" "}
+                            人（不含車長）
                           </p>
                           <div className="flex flex-wrap items-center gap-2">
                             <span>程度限制：</span>
@@ -649,6 +802,31 @@ export default function TripsPage() {
                             </p>
                           )}
                         </div>
+
+                        <TripConvoy
+                          trip={trip}
+                          cars={trip.cars}
+                          memberProfiles={memberProfiles}
+                          currentUserId={user.id}
+                          currentProfile={profile}
+                          canInteract={canCreate}
+                          joiningKey={joiningKey}
+                          addingCarTripId={addingCarTripId}
+                          newCarCapacity={newCarCapacity}
+                          isAddingCar={isAddingCar}
+                          onNewCarCapacityChange={setNewCarCapacity}
+                          onToggleAddCarForm={handleToggleAddCarForm}
+                          onConfirmAddCar={(tripId) =>
+                            void handleConfirmAddCar(tripId)
+                          }
+                          onJoinSlot={(carId, slotIndex) =>
+                            void handleJoinSlot(carId, slotIndex)
+                          }
+                          onLeaveSlot={(passengerId) =>
+                            void handleLeaveSlot(passengerId)
+                          }
+                          leavingPassengerId={leavingPassengerId}
+                        />
                       </div>
                     );
                   })}
