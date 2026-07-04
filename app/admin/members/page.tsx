@@ -282,6 +282,45 @@ export default function MembersAdminPage() {
     await loadMembers();
   };
 
+  const handleApproveAllPendingMembers = async () => {
+    if (!canReviewPending) {
+      setStatusMessage("只有幹部與管理員可以核准待審核社員。");
+      return;
+    }
+
+    const targetIds = pendingMembers.map((member) => member.id);
+    if (targetIds.length === 0) {
+      setStatusMessage("目前沒有待審核社員。");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `確定要審核通過目前所有 ${targetIds.length} 位待審核社員嗎？通過後這些人會成為正式社員。`
+      )
+    ) {
+      return;
+    }
+
+    setIsApprovingPending(true);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("approve_pending_members", {
+      target_user_ids: targetIds,
+    });
+
+    setIsApprovingPending(false);
+
+    if (error) {
+      setStatusMessage(`一鍵審核失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage(`已審核通過 ${targetIds.length} 位待審核社員。`);
+    await loadMembers();
+  };
+
   const handleApproveSurfLevel = async (targetUserId: string) => {
     if (!canReviewSurfLevels) {
       setStatusMessage("只有幹部與管理員可以審核衝浪程度。");
@@ -641,20 +680,38 @@ export default function MembersAdminPage() {
                     <ListChecks size={18} className="text-primary" />
                     <h2 className="font-semibold text-text-primary">待審核名單</h2>
                   </div>
-                  <div className="relative min-w-0 w-full sm:w-52">
-                    <Search
-                      size={14}
-                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"
-                    />
-                    <input
-                      type="search"
-                      value={pendingSearchQuery}
-                      onChange={(event) =>
-                        setPendingSearchQuery(event.target.value)
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                    <div className="relative min-w-0 flex-1 sm:w-52 sm:flex-none">
+                      <Search
+                        size={14}
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"
+                      />
+                      <input
+                        type="search"
+                        value={pendingSearchQuery}
+                        onChange={(event) =>
+                          setPendingSearchQuery(event.target.value)
+                        }
+                        placeholder="搜尋姓名、學號或 Email"
+                        className={`${fieldControlClasses} min-h-9 py-1.5 pl-8 text-sm`}
+                      />
+                    </div>
+                    <Button
+                      variant="primary"
+                      className="shrink-0 !min-h-9 !px-3 !text-sm"
+                      icon={<Check size={16} />}
+                      onClick={() => void handleApproveAllPendingMembers()}
+                      disabled={
+                        pendingMembers.length === 0 || isApprovingPending
                       }
-                      placeholder="搜尋姓名、學號或 Email"
-                      className={`${fieldControlClasses} min-h-9 py-1.5 pl-8 text-sm`}
-                    />
+                      title={
+                        pendingMembers.length === 0
+                          ? "目前沒有待審核社員"
+                          : "審核通過所有待審核社員"
+                      }
+                    >
+                      {isApprovingPending ? "審核中..." : "一鍵審核"}
+                    </Button>
                   </div>
                 </div>
 
