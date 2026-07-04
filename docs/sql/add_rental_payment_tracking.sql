@@ -139,7 +139,7 @@ as $$
 declare
   registration_row public.rental_registrations%rowtype;
   slot_row public.rental_slots%rowtype;
-  current_role text;
+  actor_role text;
 begin
   if auth.uid() is null then
     raise exception '請先登入。';
@@ -167,10 +167,10 @@ begin
     raise exception '租板時段已開始，無法取消';
   end if;
 
-  current_role := coalesce(public.current_profile_role(), 'pending');
+  actor_role := coalesce(public.current_profile_role(), 'pending');
 
   if registration_row.user_id is distinct from auth.uid()
-    and current_role not in ('board_manager', 'officer', 'admin')
+    and actor_role not in ('board_manager', 'officer', 'admin')
   then
     raise exception '只能取消自己的登記。';
   end if;
