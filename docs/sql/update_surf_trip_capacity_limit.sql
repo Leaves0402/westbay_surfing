@@ -1,6 +1,28 @@
 -- Capacity limit (1-8), trip leader management RPCs, and past-trip cleanup.
 -- Run after add_surf_trips.sql and add_surf_trip_cars.sql.
 
+-- Existing rows may already have capacity > 8 (old form had no max).
+-- Normalize them before adding the new CHECK constraints.
+update public.surf_trips
+set capacity = 8
+where capacity > 8;
+
+update public.surf_trips
+set capacity = 1
+where capacity < 1;
+
+-- Drop passengers beyond slot 8 before shrinking car capacity.
+delete from public.surf_trip_car_passengers
+where slot_index > 8;
+
+update public.surf_trip_cars
+set capacity = 8
+where capacity > 8;
+
+update public.surf_trip_cars
+set capacity = 1
+where capacity < 1;
+
 alter table public.surf_trips
 drop constraint if exists surf_trips_capacity_check;
 
