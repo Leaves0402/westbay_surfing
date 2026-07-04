@@ -73,10 +73,13 @@ export default function MembersAdminPage() {
   const [reviewingSurfLevelUserId, setReviewingSurfLevelUserId] = useState<
     string | null
   >(null);
-  const [memberSearchQuery, setMemberSearchQuery] = useState("");
-  const [removingMemberUserId, setRemovingMemberUserId] = useState<
-    string | null
-  >(null);
+  const [officialSearchQuery, setOfficialSearchQuery] = useState("");
+  const [pendingSearchQuery, setPendingSearchQuery] = useState("");
+  const [isBatchRemoveMode, setIsBatchRemoveMode] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [isRemovingMembers, setIsRemovingMembers] = useState(false);
 
   const canView = canViewMembers(profile);
   const canManage = canManageMembers(profile);
@@ -101,21 +104,40 @@ export default function MembersAdminPage() {
   );
 
   const filteredOfficialMembers = useMemo(() => {
-    const query = memberSearchQuery.trim().toLowerCase();
+    const query = officialSearchQuery.trim().toLowerCase();
     if (!query) return sortedOfficialMembers;
 
     return sortedOfficialMembers.filter((member) =>
       (member.full_name ?? "").toLowerCase().includes(query)
     );
-  }, [memberSearchQuery, sortedOfficialMembers]);
+  }, [officialSearchQuery, sortedOfficialMembers]);
+
+  const filteredPendingMembers = useMemo(() => {
+    const query = pendingSearchQuery.trim().toLowerCase();
+    if (!query) return pendingMembers;
+
+    return pendingMembers.filter((member) => {
+      const name = (member.full_name ?? "").toLowerCase();
+      const studentId = (member.student_id ?? "").toLowerCase();
+      const email = (member.email ?? "").toLowerCase();
+      return (
+        name.includes(query) ||
+        studentId.includes(query) ||
+        email.includes(query)
+      );
+    });
+  }, [pendingMembers, pendingSearchQuery]);
 
   const canRemoveMember = useCallback(
     (member: PublicMemberProfile) =>
-      canManage &&
-      member.id !== user?.id &&
-      member.role !== "admin",
+      canManage && member.id !== user?.id && member.role !== "admin",
     [canManage, user?.id]
   );
+
+  const exitBatchRemoveMode = useCallback(() => {
+    setIsBatchRemoveMode(false);
+    setSelectedMemberIds(new Set());
+  }, []);
 
   const loadMembers = useCallback(async () => {
     setIsLoadingMembers(true);
@@ -310,45 +332,67 @@ export default function MembersAdminPage() {
     await loadMembers();
   };
 
-  const handleRemoveMember = async (targetProfile: PublicMemberProfile) => {
+  const toggleMemberSelection = (member: PublicMemberProfile) => {
+    if (!canRemoveMember(member)) return;
+
+    setSelectedMemberIds((current) => {
+      const next = new Set(current);
+      if (next.has(member.id)) {
+        next.delete(member.id);
+      } else {
+        next.add(member.id);
+      }
+      return next;
+    });
+  };
+
+  const handleBatchRemoveClick = async () => {
     if (!canManage) {
       setStatusMessage("只有幹部與管理員可以移除正式成員。");
       return;
     }
 
-    if (targetProfile.id === user?.id) {
-      setStatusMessage("不能移除自己。");
+    if (!isBatchRemoveMode) {
+      setIsBatchRemoveMode(true);
+      setSelectedMemberIds(new Set());
       return;
     }
 
-    if (targetProfile.role === "admin") {
-      setStatusMessage("不能移除管理員。");
+    const removableIds = Array.from(selectedMemberIds).filter((id) => {
+      const member = officialMembers.find((item) => item.id === id);
+      return member ? canRemoveMember(member) : false;
+    });
+
+    if (removableIds.length === 0) {
+      setStatusMessage("請先勾選要移除的成員。");
       return;
     }
 
-    const displayName = targetProfile.full_name || "未填姓名";
     if (
-      !window.confirm(`確定要將【${displayName}】移出正式成員名單嗎？`)
+      !window.confirm(
+        `確定要移除選取的 ${removableIds.length} 位成員嗎？此操作無法復原。`
+      )
     ) {
       return;
     }
 
-    setRemovingMemberUserId(targetProfile.id);
+    setIsRemovingMembers(true);
     setStatusMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase.rpc("remove_official_member", {
-      target_user_id: targetProfile.id,
+    const { error } = await supabase.rpc("remove_official_members", {
+      target_user_ids: removableIds,
     });
 
-    setRemovingMemberUserId(null);
+    setIsRemovingMembers(false);
 
     if (error) {
       setStatusMessage(`移除成員失敗：${error.message}`);
       return;
     }
 
-    setStatusMessage("已將成員移出正式成員名單。");
+    exitBatchRemoveMode();
+    setStatusMessage(`已移除 ${removableIds.length} 位成員。`);
     await loadMembers();
   };
 
@@ -423,27 +467,56 @@ export default function MembersAdminPage() {
                     />
                     <input
                       type="search"
-                      value={memberSearchQuery}
+                      value={officialSearchQuery}
                       onChange={(event) =>
-                        setMemberSearchQuery(event.target.value)
+                        setOfficialSearchQuery(event.target.value)
                       }
                       placeholder="搜尋社員姓名"
                       className={`${fieldControlClasses} min-h-9 py-1.5 pl-9`}
                     />
                   </div>
-                  <Button
-                    variant="outline"
-                    className="shrink-0"
-                    icon={
-                      <RefreshCw
-                        size={16}
-                        className={isLoadingMembers ? "animate-spin" : ""}
-                      />
-                    }
-                    onClick={() => void loadMembers()}
+                  {canManage && (
+                    <>
+                      {isBatchRemoveMode && (
+                        <button
+                          type="button"
+                          aria-label="取消批量移除"
+                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-slate-600 transition-colors hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+                          onClick={exitBatchRemoveMode}
+                          disabled={isRemovingMembers}
+                        >
+                          <X size={18} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-label="批量移除成員"
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-danger/30 bg-danger-light text-lg font-medium leading-none text-danger transition-colors hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => void handleBatchRemoveClick()}
+                        disabled={
+                          isRemovingMembers ||
+                          (isBatchRemoveMode && selectedMemberIds.size === 0)
+                        }
+                      >
+                        -
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    aria-label="重新整理"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-slate-700 transition-colors hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => {
+                      exitBatchRemoveMode();
+                      void loadMembers();
+                    }}
+                    disabled={isLoadingMembers || isRemovingMembers}
                   >
-                    重新整理
-                  </Button>
+                    <RefreshCw
+                      size={18}
+                      className={isLoadingMembers ? "animate-spin" : ""}
+                    />
+                  </button>
                 </div>
               </div>
 
@@ -466,93 +539,95 @@ export default function MembersAdminPage() {
                   <table className="w-full table-fixed border-collapse text-left text-xs md:text-sm">
                     <thead>
                       <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
-                        <th className="w-[22%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                        {isBatchRemoveMode && (
+                          <th className="w-10 px-2 py-1.5 md:w-12 md:px-3 md:py-2" />
+                        )}
+                        <th className="w-[24%] px-2 py-1.5 font-medium md:px-3 md:py-2">
                           姓名
                         </th>
-                        <th className="w-[24%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                        <th className="w-[26%] px-2 py-1.5 font-medium md:px-3 md:py-2">
                           學號
                         </th>
-                        <th className="w-[22%] px-2 py-1.5 font-medium md:px-3 md:py-2">
-                          身分
-                        </th>
-                        <th className="w-[18%] whitespace-nowrap px-2 py-1.5 font-medium md:px-3 md:py-2">
+                        <th className="w-[20%] whitespace-nowrap px-2 py-1.5 font-medium md:px-3 md:py-2">
                           程度
                         </th>
-                        {canManage && (
-                          <th className="w-[14%] px-2 py-1.5 md:px-3 md:py-2" />
-                        )}
+                        <th className="w-[24%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                          身分
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
-                      {filteredOfficialMembers.map((member) => (
-                        <tr
-                          key={member.id}
-                          className="border-b border-line last:border-b-0"
-                        >
-                          <td className="truncate px-2 py-2 font-medium text-text-primary md:px-3">
-                            {member.full_name || "未填姓名"}
-                          </td>
-                          <td className="truncate px-2 py-2 text-text-secondary md:px-3">
-                            {member.student_id || "未填學號"}
-                          </td>
-                          <td className="px-2 py-2 md:px-3">
-                            {canManage ? (
-                              <select
-                                value={member.role}
-                                disabled={
-                                  member.id === user.id ||
-                                  savingRoleUserId === member.id
-                                }
-                                onChange={(event) =>
-                                  void handleUpdateRole(
-                                    member,
-                                    event.target.value as Role
-                                  )
-                                }
-                                className={`${fieldControlClasses} h-8 w-20 px-1.5 py-0.5 text-xs md:h-9 md:w-28 md:px-2 md:py-1 md:text-sm`}
-                              >
-                                {officialMemberRoleOptions.map((role) => (
-                                  <option key={role} value={role}>
-                                    {roleLabels[role]}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <Badge
-                                tone={getRoleTone(member.role)}
-                                className="!px-1.5 !py-0.5 !text-[10px] md:!px-2 md:!py-1 md:!text-xs"
-                              >
-                                {roleLabels[member.role]}
-                              </Badge>
+                      {filteredOfficialMembers.map((member) => {
+                        const removable = canRemoveMember(member);
+
+                        return (
+                          <tr
+                            key={member.id}
+                            className="border-b border-line last:border-b-0"
+                          >
+                            {isBatchRemoveMode && (
+                              <td className="px-2 py-2 md:px-3">
+                                {removable ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedMemberIds.has(member.id)}
+                                    onChange={() =>
+                                      toggleMemberSelection(member)
+                                    }
+                                    disabled={isRemovingMembers}
+                                    className="h-3.5 w-3.5 rounded border-line text-primary focus:ring-2 focus:ring-primary md:h-4 md:w-4"
+                                    aria-label={`選取 ${member.full_name || "未填姓名"}`}
+                                  />
+                                ) : null}
+                              </td>
                             )}
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-2 md:px-3">
-                            <span className="inline-block origin-left scale-90 md:scale-100">
-                              <SurfLevelBadge level={member.surf_level} />
-                            </span>
-                          </td>
-                          {canManage && (
-                            <td className="px-2 py-2 text-right md:px-3">
-                              {canRemoveMember(member) ? (
-                                <button
-                                  type="button"
-                                  aria-label={`移除 ${member.full_name || "未填姓名"}`}
-                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-danger/30 bg-danger-light text-sm font-medium leading-none text-danger transition-colors hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
-                                  onClick={() =>
-                                    void handleRemoveMember(member)
-                                  }
-                                  disabled={
-                                    removingMemberUserId === member.id
-                                  }
-                                >
-                                  -
-                                </button>
-                              ) : null}
+                            <td className="truncate px-2 py-2 font-medium text-text-primary md:px-3">
+                              {member.full_name || "未填姓名"}
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                            <td className="truncate px-2 py-2 text-text-secondary md:px-3">
+                              {member.student_id || "未填學號"}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 md:px-3">
+                              <span className="inline-block origin-left scale-90 md:scale-100">
+                                <SurfLevelBadge level={member.surf_level} />
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 md:px-3">
+                              {canManage ? (
+                                <select
+                                  value={member.role}
+                                  disabled={
+                                    member.id === user.id ||
+                                    savingRoleUserId === member.id ||
+                                    isRemovingMembers
+                                  }
+                                  onChange={(event) =>
+                                    void handleUpdateRole(
+                                      member,
+                                      event.target.value as Role
+                                    )
+                                  }
+                                  className={`${fieldControlClasses} h-8 w-20 px-1.5 py-0.5 text-xs md:h-9 md:w-28 md:px-2 md:py-1 md:text-sm`}
+                                >
+                                  {officialMemberRoleOptions.map((role) => (
+                                    <option key={role} value={role}>
+                                      {roleLabels[role]}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <Badge
+                                  tone={getRoleTone(member.role)}
+                                  className="!px-1.5 !py-0.5 !text-[10px] md:!px-2 md:!py-1 md:!text-xs"
+                                >
+                                  {roleLabels[member.role]}
+                                </Badge>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -561,14 +636,35 @@ export default function MembersAdminPage() {
 
             {canReviewPending && (
               <Card>
-                <div className="mb-4 flex items-center gap-2">
-                  <ListChecks size={18} className="text-primary" />
-                  <h2 className="font-semibold text-text-primary">待審核名單</h2>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <ListChecks size={18} className="text-primary" />
+                    <h2 className="font-semibold text-text-primary">待審核名單</h2>
+                  </div>
+                  <div className="relative min-w-0 w-full sm:w-52">
+                    <Search
+                      size={14}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"
+                    />
+                    <input
+                      type="search"
+                      value={pendingSearchQuery}
+                      onChange={(event) =>
+                        setPendingSearchQuery(event.target.value)
+                      }
+                      placeholder="搜尋姓名、學號或 Email"
+                      className={`${fieldControlClasses} min-h-9 py-1.5 pl-8 text-sm`}
+                    />
+                  </div>
                 </div>
 
                 {pendingMembers.length === 0 ? (
                   <p className="text-sm text-text-secondary">
                     目前沒有待審核社員。
+                  </p>
+                ) : filteredPendingMembers.length === 0 ? (
+                  <p className="text-sm text-text-secondary">
+                    找不到符合條件的待審核成員。
                   </p>
                 ) : (
                   <>
@@ -584,7 +680,7 @@ export default function MembersAdminPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {pendingMembers.map((member) => (
+                          {filteredPendingMembers.map((member) => (
                             <tr
                               key={member.id}
                               className="border-b border-line last:border-b-0"
@@ -618,7 +714,7 @@ export default function MembersAdminPage() {
                     </div>
 
                     <div className="grid gap-3 md:hidden">
-                      {pendingMembers.map((member) => (
+                      {filteredPendingMembers.map((member) => (
                         <label
                           key={member.id}
                           className="flex min-h-11 items-start gap-3 rounded-xl border border-line bg-appBg p-3"
