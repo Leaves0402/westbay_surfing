@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { LessonsPanel } from "@/components/lessons/LessonsPanel";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -289,6 +290,14 @@ export default function AnnouncementsPage() {
           </Card>
         ) : (
           <>
+            <div className="mb-6">
+              <LessonsPanel
+                userId={user.id}
+                profile={profile}
+                onStatusMessage={setStatusMessage}
+              />
+            </div>
+
             {canManage && (
               <Card className="mb-6">
                 <div className="mb-4 flex items-center gap-2">

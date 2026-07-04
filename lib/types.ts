@@ -111,6 +111,60 @@ export type SurfTripMessage = {
   created_at: string;
 };
 
+export type SurfTripWaitlistEntry = {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  waitlist_order: number;
+  created_at: string;
+};
+
+export type Lesson = {
+  id: string;
+  lesson_date: string;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  waitlist_capacity: number;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LessonInstructor = {
+  lesson_id: string;
+  instructor_id: string;
+};
+
+export type LessonParticipant = {
+  id: string;
+  lesson_id: string;
+  user_id: string;
+  status: "confirmed" | "waitlist";
+  waitlist_order: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LessonInstructorAttendance = {
+  id: string;
+  lesson_id: string;
+  instructor_id: string;
+  checked_in: boolean;
+  checked_in_by: string | null;
+  checked_in_at: string | null;
+};
+
+export type LessonMemberAttendance = {
+  id: string;
+  lesson_id: string;
+  user_id: string;
+  checked_in: boolean;
+  checked_in_by: string | null;
+  checked_in_at: string | null;
+};
+
 export const profileSelectColumns =
   "id, email, full_name, student_id, surf_level, requested_surf_level, requested_surf_level_at, role, created_at";
 

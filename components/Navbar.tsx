@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
   canViewAnnouncements,
+  canViewAttendancePage,
   canViewMembers,
   canViewRentals,
   canViewSurfTrips,
@@ -34,6 +35,7 @@ export function Navbar({
   onLogout,
 }: NavbarProps) {
   const pathname = usePathname();
+  const canAttendance = canViewAttendancePage(profile);
   const links = [
     ...baseLinks,
     ...(user ? [{ href: "/profile", label: "基本資料" }] : []),
@@ -44,6 +46,7 @@ export function Navbar({
     ...(canViewSurfTrips(profile)
       ? [{ href: "/trips", label: "揪外衝" }]
       : []),
+    ...(canAttendance ? [{ href: "/attendance", label: "簽到" }] : []),
     ...(canViewMembers(profile)
       ? [{ href: "/admin/members", label: "社員名單" }]
       : []),
@@ -90,6 +93,18 @@ export function Navbar({
         </div>
 
         <div className="flex shrink-0 items-center gap-3 text-sm">
+          {user && canAttendance && (
+            <Link
+              href="/attendance"
+              className={`inline-flex min-h-11 items-center rounded-xl px-3 py-2 font-medium transition-colors md:hidden ${
+                pathname.startsWith("/attendance")
+                  ? "bg-primary-light text-primary"
+                  : "text-text-secondary hover:bg-appBg hover:text-text-primary"
+              }`}
+            >
+              簽到
+            </Link>
+          )}
           {user ? (
             <>
               <div className="hidden text-right md:block">

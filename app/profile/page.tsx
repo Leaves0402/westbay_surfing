@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { CircleAlert, Gauge, Info, Lock, RefreshCw, Save, UserRound } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
@@ -11,12 +11,16 @@ import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { getRoleTone } from "@/lib/badgeTones";
+import { hasLessonStarted } from "@/lib/lessonTime";
+import { canUseMemberFeatures } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import {
   profileSelectColumns,
   reviewRequiredSurfLevels,
   roleLabels,
   surfLevelDescriptions,
+  type Lesson,
+  type LessonMemberAttendance,
   type Profile,
   type SurfLevel,
 } from "@/lib/types";
@@ -91,13 +95,18 @@ export default function ProfilePage() {
             正在建立或讀取社員資料...
           </Card>
         ) : (
-          <ProfileForm
-            key={`${profile.id}-${profile.requested_surf_level ?? ""}`}
-            user={user}
-            profile={profile}
-            setStatusMessage={setStatusMessage}
-            reloadProfile={reloadProfile}
-          />
+          <>
+            <ProfileForm
+              key={`${profile.id}-${profile.requested_surf_level ?? ""}`}
+              user={user}
+              profile={profile}
+              setStatusMessage={setStatusMessage}
+              reloadProfile={reloadProfile}
+            />
+            {canUseMemberFeatures(profile) && (
+              <LessonAttendanceStatCard userId={user.id} />
+            )}
+          </>
         )}
 
         {statusMessage && (
@@ -110,6 +119,65 @@ export default function ProfilePage() {
 
       <MobileTabBar />
     </main>
+  );
+}
+
+function LessonAttendanceStatCard({ userId }: { userId: string }) {
+  const [attendedCount, setAttendedCount] = useState(0);
+  const [startedLessonCount, setStartedLessonCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadStats = async () => {
+      setIsLoading(true);
+      const supabase = createClient();
+      const [lessonsResult, attendanceResult] = await Promise.all([
+        supabase
+          .from("lessons")
+          .select("id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"),
+        supabase
+          .from("lesson_member_attendance")
+          .select(
+            "id, lesson_id, user_id, checked_in, checked_in_by, checked_in_at"
+          )
+          .eq("user_id", userId)
+          .eq("checked_in", true),
+      ]);
+
+      if (!active) return;
+
+      const lessons = (lessonsResult.data ?? []) as Lesson[];
+      const attendance = (attendanceResult.data ??
+        []) as LessonMemberAttendance[];
+      const startedLessons = lessons.filter((lesson) =>
+        hasLessonStarted(lesson.lesson_date, lesson.start_time)
+      );
+      const startedIds = new Set(startedLessons.map((lesson) => lesson.id));
+
+      setStartedLessonCount(startedLessons.length);
+      setAttendedCount(
+        attendance.filter((item) => startedIds.has(item.lesson_id)).length
+      );
+      setIsLoading(false);
+    };
+
+    void loadStats();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  return (
+    <Card className="mt-6">
+      <h2 className="font-semibold text-text-primary">社課出席</h2>
+      <p className="mt-2 text-sm text-text-secondary">
+        {isLoading
+          ? "讀取中..."
+          : `社課出席：${attendedCount} / ${startedLessonCount}`}
+      </p>
+    </Card>
   );
 }
 

@@ -25,7 +25,11 @@ import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { getRoleTone } from "@/lib/badgeTones";
-import { canCreateSurfTrips, canViewSurfTrips } from "@/lib/permissions";
+import {
+  canCreateSurfTrips,
+  canViewSurfTrips,
+  userMeetsSurfLevel,
+} from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import {
   roleLabels,
@@ -36,12 +40,14 @@ import {
   type SurfTripCar,
   type SurfTripCarPassenger,
   type SurfTripSpot,
+  type SurfTripWaitlistEntry,
 } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
 
 type TripWithDetails = SurfTrip & {
   spots: SurfSpot[];
   cars: TripCarWithPassengers[];
+  waitlist: SurfTripWaitlistEntry[];
 };
 
 function getTodayDate() {
@@ -153,6 +159,7 @@ export default function TripsPage() {
       tripSpotsResult,
       carsResult,
       passengersResult,
+      waitlistResult,
       membersResult,
     ] = await Promise.all([
       supabase
@@ -177,6 +184,10 @@ export default function TripsPage() {
         .from("surf_trip_car_passengers")
         .select("id, car_id, trip_id, user_id, slot_index, created_at")
         .order("slot_index", { ascending: true }),
+      supabase
+        .from("surf_trip_waitlist")
+        .select("id, trip_id, user_id, waitlist_order, created_at")
+        .order("waitlist_order", { ascending: true }),
       supabase
         .from("public_member_profiles")
         .select("id, full_name, student_id, surf_level, role"),
@@ -209,6 +220,11 @@ export default function TripsPage() {
       return;
     }
 
+    if (waitlistResult.error) {
+      setStatusMessage(`讀取備取名單失敗：${waitlistResult.error.message}`);
+      return;
+    }
+
     if (membersResult.error) {
       setStatusMessage(`讀取社員公開資料失敗：${membersResult.error.message}`);
       return;
@@ -218,9 +234,37 @@ export default function TripsPage() {
     const loadedTrips = (tripsResult.data ?? []) as SurfTrip[];
     const loadedTripSpots = (tripSpotsResult.data ?? []) as SurfTripSpot[];
     const loadedCars = (carsResult.data ?? []) as SurfTripCar[];
-    const loadedPassengers = (passengersResult.data ??
+    let loadedPassengers = (passengersResult.data ??
       []) as SurfTripCarPassenger[];
+    let loadedWaitlist = (waitlistResult.data ??
+      []) as SurfTripWaitlistEntry[];
     const spotsById = new Map(loadedSpots.map((spot) => [spot.id, spot]));
+
+    for (const trip of loadedTrips) {
+      await supabase.rpc("promote_surf_trip_waitlist", {
+        target_trip_id: trip.id,
+      });
+    }
+
+    const [refreshedPassengers, refreshedWaitlist] = await Promise.all([
+      supabase
+        .from("surf_trip_car_passengers")
+        .select("id, car_id, trip_id, user_id, slot_index, created_at")
+        .order("slot_index", { ascending: true }),
+      supabase
+        .from("surf_trip_waitlist")
+        .select("id, trip_id, user_id, waitlist_order, created_at")
+        .order("waitlist_order", { ascending: true }),
+    ]);
+
+    if (!refreshedPassengers.error) {
+      loadedPassengers = (refreshedPassengers.data ??
+        []) as SurfTripCarPassenger[];
+    }
+    if (!refreshedWaitlist.error) {
+      loadedWaitlist = (refreshedWaitlist.data ??
+        []) as SurfTripWaitlistEntry[];
+    }
 
     const tripsWithDetails: TripWithDetails[] = loadedTrips.map((trip) => {
       const tripCars = loadedCars
@@ -244,6 +288,9 @@ export default function TripsPage() {
               a.name.localeCompare(b.name, "zh-Hant")
           ),
         cars: tripCars,
+        waitlist: loadedWaitlist
+          .filter((item) => item.trip_id === trip.id)
+          .sort((a, b) => a.waitlist_order - b.waitlist_order),
       };
     });
 
@@ -524,6 +571,48 @@ export default function TripsPage() {
     }
 
     setStatusMessage("已取消跟車。");
+    await loadTripData();
+  };
+
+  const handleJoinWaitlist = async (tripId: string) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    setStatusMessage("");
+    const supabase = createClient();
+    const { error } = await supabase.rpc("join_surf_trip_waitlist", {
+      target_trip_id: tripId,
+    });
+
+    if (error) {
+      setStatusMessage(`加入備取失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已加入備取。");
+    await loadTripData();
+  };
+
+  const handleCancelWaitlist = async (tripId: string) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    setStatusMessage("");
+    const supabase = createClient();
+    const { error } = await supabase.rpc("cancel_surf_trip_waitlist", {
+      target_trip_id: tripId,
+    });
+
+    if (error) {
+      setStatusMessage(`取消備取失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已取消備取。");
     await loadTripData();
   };
 
@@ -835,6 +924,25 @@ export default function TripsPage() {
                       (sum, car) => sum + car.passengers.length,
                       0
                     );
+                    const carsFull =
+                      totalCapacity > 0 && totalPassengers >= totalCapacity;
+                    const myWaitlist = trip.waitlist.find(
+                      (item) => item.user_id === user.id
+                    );
+                    const isCarLeader = trip.cars.some(
+                      (car) => car.leader_id === user.id
+                    );
+                    const isPassenger = trip.cars.some((car) =>
+                      car.passengers.some(
+                        (passenger) => passenger.user_id === user.id
+                      )
+                    );
+                    const meetsLevel = userMeetsSurfLevel(
+                      profile,
+                      trip.min_surf_level
+                    );
+                    const waitlistFull = trip.waitlist.length >= 3;
+
                     return (
                       <div
                         key={trip.id}
@@ -860,6 +968,11 @@ export default function TripsPage() {
                               <Users size={12} />
                               已跟 {totalPassengers} / {totalCapacity}
                             </span>
+                            {carsFull && (
+                              <span className="inline-flex items-center rounded-full bg-warning-light px-2.5 py-1 text-xs font-medium text-warning">
+                                備取 {trip.waitlist.length} / 3
+                              </span>
+                            )}
                             <Button
                               type="button"
                               variant="outline"
@@ -1004,6 +1117,99 @@ export default function TripsPage() {
                           }
                           leavingPassengerId={leavingPassengerId}
                         />
+
+                        <div className="mt-4 border-t border-line pt-4">
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-sm font-semibold text-text-primary">
+                              備取名單
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                              {myWaitlist ? (
+                                <>
+                                  <span className="text-xs text-warning">
+                                    備取第 {myWaitlist.waitlist_order} 位
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="danger"
+                                    className="!min-h-8 !px-2.5 !text-xs"
+                                    onClick={() =>
+                                      void handleCancelWaitlist(trip.id)
+                                    }
+                                  >
+                                    取消備取
+                                  </Button>
+                                </>
+                              ) : carsFull &&
+                                !isCarLeader &&
+                                !isPassenger &&
+                                meetsLevel &&
+                                !waitlistFull ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="!min-h-8 !px-2.5 !text-xs"
+                                  onClick={() =>
+                                    void handleJoinWaitlist(trip.id)
+                                  }
+                                >
+                                  加入備取
+                                </Button>
+                              ) : carsFull && waitlistFull && !myWaitlist ? (
+                                <span className="text-xs text-text-secondary">
+                                  備取已滿
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {!carsFull ? (
+                            <p className="text-xs text-text-secondary">
+                              仍有空車廂時請直接跟車，備取僅在車位已滿時開放。
+                            </p>
+                          ) : trip.waitlist.length === 0 ? (
+                            <p className="text-xs text-text-secondary">
+                              目前沒有備取。
+                            </p>
+                          ) : (
+                            <div className="overflow-x-auto rounded-xl border border-line">
+                              <table className="w-full min-w-[320px] text-left text-sm">
+                                <thead className="bg-surface text-xs text-text-secondary">
+                                  <tr>
+                                    <th className="px-3 py-2">序號</th>
+                                    <th className="px-3 py-2">姓名</th>
+                                    <th className="px-3 py-2">程度</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {trip.waitlist.map((entry) => {
+                                    const member = memberProfiles.find(
+                                      (item) => item.id === entry.user_id
+                                    );
+                                    return (
+                                      <tr
+                                        key={entry.id}
+                                        className="border-t border-line"
+                                      >
+                                        <td className="px-3 py-2">
+                                          {entry.waitlist_order}
+                                        </td>
+                                        <td className="px-3 py-2 font-medium">
+                                          {member?.full_name || "未填姓名"}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <SurfLevelBadge
+                                            level={member?.surf_level}
+                                          />
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
