@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import {
   canViewAnnouncements,
   canViewAttendancePage,
+  canViewMaintenancePage,
   canViewMembers,
   canViewRentals,
   canViewSurfTrips,
@@ -36,6 +37,7 @@ export function Navbar({
 }: NavbarProps) {
   const pathname = usePathname();
   const canAttendance = canViewAttendancePage(profile);
+  const canMaintenance = canViewMaintenancePage(profile);
   const links = [
     ...baseLinks,
     ...(user ? [{ href: "/profile", label: "基本資料" }] : []),
@@ -49,6 +51,9 @@ export function Navbar({
     ...(canAttendance ? [{ href: "/attendance", label: "簽到" }] : []),
     ...(canViewMembers(profile)
       ? [{ href: "/admin/members", label: "社員名單" }]
+      : []),
+    ...(canMaintenance
+      ? [{ href: "/maintenance", label: "系統維護與聯絡" }]
       : []),
   ];
 
@@ -103,6 +108,18 @@ export function Navbar({
               }`}
             >
               簽到
+            </Link>
+          )}
+          {user && canMaintenance && (
+            <Link
+              href="/maintenance"
+              className={`inline-flex min-h-11 items-center rounded-xl px-2.5 py-2 text-xs font-medium transition-colors md:hidden ${
+                pathname.startsWith("/maintenance")
+                  ? "bg-primary-light text-primary"
+                  : "text-text-secondary hover:bg-appBg hover:text-text-primary"
+              }`}
+            >
+              維護
             </Link>
           )}
           {user ? (

@@ -100,6 +100,10 @@ export function canViewAttendancePage(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }
 
+export function canViewMaintenancePage(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
 export function getSurfLevelRank(level: string | null | undefined) {
   if (!level) return 0;
   return surfLevelRanks[level as SurfLevel] ?? 0;
