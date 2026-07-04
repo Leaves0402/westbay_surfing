@@ -19,6 +19,10 @@ import {
   canViewAttendancePage,
 } from "@/lib/permissions";
 import { formatLessonLabel, hasLessonStarted } from "@/lib/lessonTime";
+import {
+  countInstructorTeaching,
+  countLessonAttendance,
+} from "@/lib/lessonStats";
 import { createClient } from "@/lib/supabase/client";
 import type {
   Lesson,
@@ -197,22 +201,24 @@ export default function AttendancePage() {
   );
 
   const instructorStats = useMemo(() => {
+    const startedCount = startedLessons.length;
     const startedIds = new Set(startedLessons.map((lesson) => lesson.id));
-    const counts = new Map<string, number>();
-
-    for (const row of allInstructorAttendance) {
-      if (!row.checked_in || !startedIds.has(row.lesson_id)) continue;
-      counts.set(row.instructor_id, (counts.get(row.instructor_id) ?? 0) + 1);
-    }
 
     return members
       .filter((member) => member.role === "officer" || member.role === "admin")
       .map((member) => ({
         member,
-        count: counts.get(member.id) ?? 0,
+        teachingCount: countInstructorTeaching(
+          member.id,
+          startedIds,
+          allInstructorAttendance
+        ),
+        total: startedCount,
       }))
       .sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
+        if (b.teachingCount !== a.teachingCount) {
+          return b.teachingCount - a.teachingCount;
+        }
         const levelCompare = compareSurfLevelsDescending(
           a.member.surf_level,
           b.member.surf_level
@@ -228,17 +234,16 @@ export default function AttendancePage() {
   const memberStats = useMemo(() => {
     const startedCount = startedLessons.length;
     const startedIds = new Set(startedLessons.map((lesson) => lesson.id));
-    const counts = new Map<string, number>();
-
-    for (const row of allMemberAttendance) {
-      if (!row.checked_in || !startedIds.has(row.lesson_id)) continue;
-      counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
-    }
 
     return members
       .map((member) => ({
         member,
-        count: counts.get(member.id) ?? 0,
+        count: countLessonAttendance(
+          member.id,
+          startedIds,
+          allMemberAttendance,
+          allInstructorAttendance
+        ),
         total: startedCount,
       }))
       .sort((a, b) => {
@@ -253,7 +258,12 @@ export default function AttendancePage() {
           "zh-Hant"
         );
       });
-  }, [allMemberAttendance, members, startedLessons]);
+  }, [
+    allInstructorAttendance,
+    allMemberAttendance,
+    members,
+    startedLessons,
+  ]);
 
   const toggleInstructorAttendance = async (
     instructorId: string,
@@ -553,18 +563,18 @@ export default function AttendancePage() {
             </Card>
 
             <Card>
-              <h2 className="mb-3 font-semibold">幹部出席教學次數統計</h2>
+              <h2 className="mb-3 font-semibold">幹部教學次數統計</h2>
               <div className="overflow-x-auto rounded-xl border border-line">
                 <table className="w-full min-w-[420px] text-left text-sm">
                   <thead className="bg-appBg text-xs text-text-secondary">
                     <tr>
                       <th className="px-3 py-2">姓名</th>
                       <th className="px-3 py-2">程度</th>
-                      <th className="px-3 py-2">教學出席次數</th>
+                      <th className="px-3 py-2">教學次數 / 社課次數</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {instructorStats.map(({ member, count }) => (
+                    {instructorStats.map(({ member, teachingCount, total }) => (
                       <tr key={member.id} className="border-t border-line">
                         <td className="px-3 py-2 font-medium">
                           {member.full_name || "未填姓名"}
@@ -572,7 +582,9 @@ export default function AttendancePage() {
                         <td className="px-3 py-2">
                           <SurfLevelBadge level={member.surf_level} />
                         </td>
-                        <td className="px-3 py-2">{count}</td>
+                        <td className="px-3 py-2">
+                          {teachingCount} / {total}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -588,7 +600,7 @@ export default function AttendancePage() {
                     <tr>
                       <th className="px-3 py-2">姓名</th>
                       <th className="px-3 py-2">程度</th>
-                      <th className="px-3 py-2">出席次數 / 已開社課次數</th>
+                      <th className="px-3 py-2">出席次數 / 社課次數</th>
                     </tr>
                   </thead>
                   <tbody>

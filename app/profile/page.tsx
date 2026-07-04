@@ -12,6 +12,7 @@ import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { getRoleTone } from "@/lib/badgeTones";
 import { hasLessonStarted } from "@/lib/lessonTime";
+import { countLessonAttendance } from "@/lib/lessonStats";
 import { canUseMemberFeatures } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -20,6 +21,7 @@ import {
   roleLabels,
   surfLevelDescriptions,
   type Lesson,
+  type LessonInstructorAttendance,
   type LessonMemberAttendance,
   type Profile,
   type SurfLevel,
@@ -133,24 +135,36 @@ function LessonAttendanceStatCard({ userId }: { userId: string }) {
     const loadStats = async () => {
       setIsLoading(true);
       const supabase = createClient();
-      const [lessonsResult, attendanceResult] = await Promise.all([
-        supabase
-          .from("lessons")
-          .select("id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"),
-        supabase
-          .from("lesson_member_attendance")
-          .select(
-            "id, lesson_id, user_id, checked_in, checked_in_by, checked_in_at"
-          )
-          .eq("user_id", userId)
-          .eq("checked_in", true),
-      ]);
+      const [lessonsResult, memberAttendanceResult, instructorAttendanceResult] =
+        await Promise.all([
+          supabase
+            .from("lessons")
+            .select(
+              "id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"
+            ),
+          supabase
+            .from("lesson_member_attendance")
+            .select(
+              "id, lesson_id, user_id, checked_in, checked_in_by, checked_in_at"
+            )
+            .eq("user_id", userId)
+            .eq("checked_in", true),
+          supabase
+            .from("lesson_instructor_attendance")
+            .select(
+              "id, lesson_id, instructor_id, checked_in, checked_in_by, checked_in_at"
+            )
+            .eq("instructor_id", userId)
+            .eq("checked_in", true),
+        ]);
 
       if (!active) return;
 
       const lessons = (lessonsResult.data ?? []) as Lesson[];
-      const attendance = (attendanceResult.data ??
+      const memberAttendance = (memberAttendanceResult.data ??
         []) as LessonMemberAttendance[];
+      const instructorAttendance = (instructorAttendanceResult.data ??
+        []) as LessonInstructorAttendance[];
       const startedLessons = lessons.filter((lesson) =>
         hasLessonStarted(lesson.lesson_date, lesson.start_time)
       );
@@ -158,7 +172,12 @@ function LessonAttendanceStatCard({ userId }: { userId: string }) {
 
       setStartedLessonCount(startedLessons.length);
       setAttendedCount(
-        attendance.filter((item) => startedIds.has(item.lesson_id)).length
+        countLessonAttendance(
+          userId,
+          startedIds,
+          memberAttendance,
+          instructorAttendance
+        )
       );
       setIsLoading(false);
     };
