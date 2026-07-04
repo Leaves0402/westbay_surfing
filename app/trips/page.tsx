@@ -6,12 +6,14 @@ import {
   Info,
   Lock,
   MapPin,
+  MessageCircle,
   Plus,
   RefreshCw,
   Users,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { SpotMultiSelect, formatSpotLabel } from "@/components/trips/SpotMultiSelect";
+import { TripChatModal } from "@/components/trips/TripChatModal";
 import {
   TripConvoy,
   type TripCarWithPassengers,
@@ -99,6 +101,14 @@ export default function TripsPage() {
   const [addingCarTripId, setAddingCarTripId] = useState<string | null>(null);
   const [newCarCapacity, setNewCarCapacity] = useState("3");
   const [isAddingCar, setIsAddingCar] = useState(false);
+  const [removingSlotKey, setRemovingSlotKey] = useState<string | null>(null);
+  const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
+  const [editingLevelTripId, setEditingLevelTripId] = useState<string | null>(
+    null
+  );
+  const [editingMinSurfLevel, setEditingMinSurfLevel] = useState("");
+  const [isSavingLevel, setIsSavingLevel] = useState(false);
+  const [chatTripId, setChatTripId] = useState<string | null>(null);
 
   const [startDate, setStartDate] = useState(getTodayDate());
   const [endDate, setEndDate] = useState(getTodayDate());
@@ -140,6 +150,10 @@ export default function TripsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
+    const today = getTodayDate();
+
+    await supabase.rpc("cleanup_past_surf_trips");
+
     const [
       spotsResult,
       tripsResult,
@@ -158,6 +172,7 @@ export default function TripsPage() {
         .select(
           "id, start_date, end_date, capacity, leader_id, min_surf_level, note, created_by, created_at, updated_at"
         )
+        .gte("end_date", today)
         .order("start_date", { ascending: true })
         .order("created_at", { ascending: false }),
       supabase.from("surf_trip_spots").select("trip_id, spot_id"),
@@ -366,6 +381,11 @@ export default function TripsPage() {
       return;
     }
 
+    if (capacityValue > 8) {
+      setStatusMessage("人數上限最多 8 人，不包含負責人。");
+      return;
+    }
+
     const resolvedLeaderId = canPickLeader ? leaderId || user.id : user.id;
 
     setIsCreatingTrip(true);
@@ -434,6 +454,11 @@ export default function TripsPage() {
     const capacityValue = Number(newCarCapacity);
     if (!Number.isInteger(capacityValue) || capacityValue < 1) {
       setStatusMessage("請輸入有效人數。");
+      return;
+    }
+
+    if (capacityValue > 8) {
+      setStatusMessage("人數上限最多 8 人，不包含負責人。");
       return;
     }
 
@@ -515,6 +540,109 @@ export default function TripsPage() {
     setStatusMessage("已取消跟車。");
     await loadTripData();
   };
+
+  const handleRemoveSlot = async (carId: string, slotIndex: number) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    const removeKey = `${carId}-${slotIndex}`;
+    setRemovingSlotKey(removeKey);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("remove_surf_trip_car_slot", {
+      target_car_id: carId,
+      target_slot_index: slotIndex,
+    });
+
+    setRemovingSlotKey(null);
+
+    if (error) {
+      setStatusMessage(`移除車廂失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已移除車廂。");
+    await loadTripData();
+  };
+
+  const handleDeleteTrip = async (trip: TripWithDetails) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    if (trip.leader_id !== user.id) {
+      setStatusMessage("只有活動負責人可以移除此活動。");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "確定要移除此活動嗎？所有車隊、跟車與聊天室紀錄都會被刪除，此操作無法復原。"
+      )
+    ) {
+      return;
+    }
+
+    setDeletingTripId(trip.id);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("delete_surf_trip", {
+      target_trip_id: trip.id,
+    });
+
+    setDeletingTripId(null);
+
+    if (error) {
+      setStatusMessage(`移除活動失敗：${error.message}`);
+      return;
+    }
+
+    if (chatTripId === trip.id) {
+      setChatTripId(null);
+    }
+
+    setStatusMessage("活動已移除。");
+    await loadTripData();
+  };
+
+  const handleStartEditLevel = (trip: TripWithDetails) => {
+    setEditingLevelTripId(trip.id);
+    setEditingMinSurfLevel(trip.min_surf_level ?? "");
+  };
+
+  const handleSaveLevel = async (tripId: string) => {
+    if (!user) {
+      setStatusMessage("請先登入。");
+      return;
+    }
+
+    setIsSavingLevel(true);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("update_surf_trip_min_level", {
+      target_trip_id: tripId,
+      new_min_surf_level: editingMinSurfLevel || null,
+    });
+
+    setIsSavingLevel(false);
+
+    if (error) {
+      setStatusMessage(`修改程度限制失敗：${error.message}`);
+      return;
+    }
+
+    setEditingLevelTripId(null);
+    setStatusMessage("程度限制已更新。");
+    await loadTripData();
+  };
+
+  const chatTrip = trips.find((trip) => trip.id === chatTripId) ?? null;
 
   return (
     <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
@@ -627,10 +755,14 @@ export default function TripsPage() {
                     </span>
                   </div>
 
-                  <FormField label="人數上限" hint="不包含負責人（第一台車跟車名額）">
+                  <FormField
+                    label="人數上限"
+                    hint="不包含負責人（第一台車跟車名額），最多 8 人"
+                  >
                     <input
                       type="number"
                       min="1"
+                      max="8"
                       value={capacity}
                       onChange={(event) => setCapacity(event.target.value)}
                       className={fieldControlClasses}
@@ -731,6 +863,7 @@ export default function TripsPage() {
                     const leader = memberProfiles.find(
                       (member) => member.id === trip.leader_id
                     );
+                    const isActivityLeader = trip.leader_id === user.id;
                     const totalCapacity = trip.cars.reduce(
                       (sum, car) => sum + car.capacity,
                       0
@@ -739,14 +872,13 @@ export default function TripsPage() {
                       (sum, car) => sum + car.passengers.length,
                       0
                     );
-
                     return (
                       <div
                         key={trip.id}
                         className="rounded-xl border border-line bg-appBg p-4"
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <p className="text-base font-semibold text-text-primary">
                               {formatDateRange(trip.start_date, trip.end_date)}
                             </p>
@@ -759,10 +891,35 @@ export default function TripsPage() {
                                 : "未指定"}
                             </p>
                           </div>
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary-light px-2.5 py-1 text-xs font-medium text-primary">
-                            <Users size={12} />
-                            已跟 {totalPassengers} / {totalCapacity}
-                          </span>
+
+                          <div className="flex shrink-0 flex-col items-end gap-2">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary-light px-2.5 py-1 text-xs font-medium text-primary">
+                              <Users size={12} />
+                              已跟 {totalPassengers} / {totalCapacity}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="!min-h-8 !px-2.5 !text-xs"
+                              icon={<MessageCircle size={14} />}
+                              onClick={() => setChatTripId(trip.id)}
+                            >
+                              聊天室
+                            </Button>
+                            {isActivityLeader && (
+                              <Button
+                                type="button"
+                                variant="danger"
+                                className="!min-h-8 !px-2.5 !text-xs"
+                                onClick={() => void handleDeleteTrip(trip)}
+                                disabled={deletingTripId === trip.id}
+                              >
+                                {deletingTripId === trip.id
+                                  ? "移除中..."
+                                  : "移除活動"}
+                              </Button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="mt-3 grid gap-2 text-sm text-text-secondary">
@@ -785,15 +942,67 @@ export default function TripsPage() {
                           </p>
                           <div className="flex flex-wrap items-center gap-2">
                             <span>程度限制：</span>
-                            {trip.min_surf_level ? (
-                              <SurfLevelBadge level={trip.min_surf_level} />
+                            {editingLevelTripId === trip.id ? (
+                              <>
+                                <select
+                                  value={editingMinSurfLevel}
+                                  onChange={(event) =>
+                                    setEditingMinSurfLevel(event.target.value)
+                                  }
+                                  className={`${fieldControlClasses} !min-h-9 w-auto py-1 text-sm`}
+                                  disabled={isSavingLevel}
+                                >
+                                  <option value="">不限制</option>
+                                  {surfLevelOptions.map((level) => (
+                                    <option key={level} value={level}>
+                                      {level}以上
+                                    </option>
+                                  ))}
+                                </select>
+                                <Button
+                                  type="button"
+                                  variant="primary"
+                                  className="!min-h-8 !px-2.5 !text-xs"
+                                  onClick={() => void handleSaveLevel(trip.id)}
+                                  disabled={isSavingLevel}
+                                >
+                                  {isSavingLevel ? "儲存中..." : "儲存"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="!min-h-8 !px-2.5 !text-xs"
+                                  onClick={() => setEditingLevelTripId(null)}
+                                  disabled={isSavingLevel}
+                                >
+                                  取消
+                                </Button>
+                              </>
                             ) : (
-                              <span className="text-text-primary">
-                                {formatMinSurfLevel(trip.min_surf_level)}
-                              </span>
-                            )}
-                            {trip.min_surf_level && (
-                              <span className="text-text-secondary">以上</span>
+                              <>
+                                {trip.min_surf_level ? (
+                                  <SurfLevelBadge level={trip.min_surf_level} />
+                                ) : (
+                                  <span className="text-text-primary">
+                                    {formatMinSurfLevel(trip.min_surf_level)}
+                                  </span>
+                                )}
+                                {trip.min_surf_level && (
+                                  <span className="text-text-secondary">
+                                    以上
+                                  </span>
+                                )}
+                                {isActivityLeader && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="!min-h-8 !px-2.5 !text-xs"
+                                    onClick={() => handleStartEditLevel(trip)}
+                                  >
+                                    修改
+                                  </Button>
+                                )}
+                              </>
                             )}
                           </div>
                           {trip.note && (
@@ -810,7 +1019,9 @@ export default function TripsPage() {
                           currentUserId={user.id}
                           currentProfile={profile}
                           canInteract={canCreate}
+                          isTripActivityLeader={isActivityLeader}
                           joiningKey={joiningKey}
+                          removingSlotKey={removingSlotKey}
                           addingCarTripId={addingCarTripId}
                           newCarCapacity={newCarCapacity}
                           isAddingCar={isAddingCar}
@@ -824,6 +1035,9 @@ export default function TripsPage() {
                           }
                           onLeaveSlot={(passengerId) =>
                             void handleLeaveSlot(passengerId)
+                          }
+                          onRemoveSlot={(carId, slotIndex) =>
+                            void handleRemoveSlot(carId, slotIndex)
                           }
                           leavingPassengerId={leavingPassengerId}
                         />
@@ -843,6 +1057,22 @@ export default function TripsPage() {
           </Card>
         )}
       </div>
+
+      {chatTrip && user && (
+        <TripChatModal
+          tripId={chatTrip.id}
+          title={`${formatDateRange(chatTrip.start_date, chatTrip.end_date)} · ${
+            chatTrip.spots.length > 0
+              ? chatTrip.spots.map((spot) => formatSpotLabel(spot)).join("、")
+              : "未指定地點"
+          }`}
+          currentUserId={user.id}
+          memberProfiles={memberProfiles}
+          canSend={canCreate}
+          onClose={() => setChatTripId(null)}
+          onError={setStatusMessage}
+        />
+      )}
 
       <MobileTabBar />
     </main>

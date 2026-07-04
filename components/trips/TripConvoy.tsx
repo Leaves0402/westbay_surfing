@@ -16,6 +16,10 @@ export type TripCarWithPassengers = SurfTripCar & {
   passengers: SurfTripCarPassenger[];
 };
 
+type ConvoyUnit =
+  | { type: "leader" }
+  | { type: "slot"; slotIndex: number };
+
 type TripConvoyProps = {
   trip: SurfTrip;
   cars: TripCarWithPassengers[];
@@ -23,7 +27,9 @@ type TripConvoyProps = {
   currentUserId: string | undefined;
   currentProfile: Profile | null;
   canInteract: boolean;
+  isTripActivityLeader: boolean;
   joiningKey: string | null;
+  removingSlotKey: string | null;
   addingCarTripId: string | null;
   newCarCapacity: string;
   isAddingCar: boolean;
@@ -32,8 +38,11 @@ type TripConvoyProps = {
   onConfirmAddCar: (tripId: string) => void;
   onJoinSlot: (carId: string, slotIndex: number) => void;
   onLeaveSlot: (passengerId: string) => void;
+  onRemoveSlot: (carId: string, slotIndex: number) => void;
   leavingPassengerId: string | null;
 };
+
+const UNITS_PER_ROW = 5;
 
 function getMember(
   memberProfiles: PublicMemberProfile[],
@@ -49,6 +58,24 @@ function getMemberName(
   return getMember(memberProfiles, userId)?.full_name || "未填姓名";
 }
 
+function buildSShapeRows(capacity: number): ConvoyUnit[][] {
+  const units: ConvoyUnit[] = [
+    { type: "leader" },
+    ...Array.from({ length: capacity }, (_, index) => ({
+      type: "slot" as const,
+      slotIndex: index + 1,
+    })),
+  ];
+
+  const rows: ConvoyUnit[][] = [];
+  for (let index = 0; index < units.length; index += UNITS_PER_ROW) {
+    const row = units.slice(index, index + UNITS_PER_ROW);
+    const rowIndex = Math.floor(index / UNITS_PER_ROW);
+    rows.push(rowIndex % 2 === 1 ? [...row].reverse() : row);
+  }
+  return rows;
+}
+
 export function TripConvoy({
   trip,
   cars,
@@ -56,7 +83,9 @@ export function TripConvoy({
   currentUserId,
   currentProfile,
   canInteract,
+  isTripActivityLeader,
   joiningKey,
+  removingSlotKey,
   addingCarTripId,
   newCarCapacity,
   isAddingCar,
@@ -65,10 +94,11 @@ export function TripConvoy({
   onConfirmAddCar,
   onJoinSlot,
   onLeaveSlot,
+  onRemoveSlot,
   leavingPassengerId,
 }: TripConvoyProps) {
   const meetsLevel = userMeetsSurfLevel(currentProfile, trip.min_surf_level);
-  const isTripLeader = cars.some((car) => car.leader_id === currentUserId);
+  const isAnyCarLeader = cars.some((car) => car.leader_id === currentUserId);
   const myPassenger = cars
     .flatMap((car) => car.passengers)
     .find((passenger) => passenger.user_id === currentUserId);
@@ -80,14 +110,20 @@ export function TripConvoy({
     0
   );
 
-  const getJoinDisabledReason = (slotTaken: boolean) => {
-    if (!canInteract) return "僅正式成員可跟車";
-    if (!meetsLevel) return "程度不足";
-    if (isTripLeader) return "你是車長";
+  const getStatusLabel = () => {
     if (isPassenger) return "已跟車";
-    if (slotTaken) return "已有人";
+    if (!meetsLevel) return "程度不足";
     return null;
   };
+
+  const statusLabel = getStatusLabel();
+
+  const canJoinSlot = (slotTaken: boolean) =>
+    canInteract &&
+    meetsLevel &&
+    !isAnyCarLeader &&
+    !isPassenger &&
+    !slotTaken;
 
   return (
     <div className="mt-4 border-t border-line pt-4">
@@ -106,6 +142,7 @@ export function TripConvoy({
                 <input
                   type="number"
                   min="1"
+                  max="8"
                   value={newCarCapacity}
                   onChange={(event) =>
                     onNewCarCapacityChange(event.target.value)
@@ -159,115 +196,188 @@ export function TripConvoy({
                 passenger,
               ])
             );
+            const rows = buildSShapeRows(car.capacity);
 
             return (
               <div
                 key={car.id}
                 className="rounded-xl border border-line bg-surface p-3"
               >
-                <div className="overflow-x-auto pb-1">
-                  <div className="flex min-w-max items-start gap-1">
-                    <div className="flex w-16 shrink-0 flex-col items-center">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary-light text-2xl">
-                        🏄
-                      </div>
-                      <p className="mt-1 max-w-16 truncate text-center text-xs font-medium text-text-primary">
-                        {leaderName}
-                      </p>
-                      <p className="text-[10px] text-text-secondary">車長</p>
-                    </div>
+                <div className="flex flex-col gap-2">
+                  {rows.map((row, rowIndex) => {
+                    const isRtl = rowIndex % 2 === 1;
+                    const hasNextRow = rowIndex < rows.length - 1;
 
-                    {Array.from({ length: car.capacity }, (_, index) => {
-                      const slotIndex = index + 1;
-                      const passenger = passengersBySlot.get(slotIndex);
-                      const passengerProfile = passenger
-                        ? getMember(memberProfiles, passenger.user_id)
-                        : null;
-                      const isMine =
-                        passenger?.user_id === currentUserId &&
-                        Boolean(passenger);
-                      const slotTaken = Boolean(passenger);
-                      const disabledReason = getJoinDisabledReason(slotTaken);
-                      const joinKey = `${car.id}-${slotIndex}`;
-                      const isJoining = joiningKey === joinKey;
+                    return (
+                      <div key={rowIndex} className="relative">
+                        <div className="flex items-start gap-1">
+                          {row.map((unit, unitIndex) => {
+                            const showConnector =
+                              unitIndex < row.length - 1 ||
+                              (unitIndex === row.length - 1 && hasNextRow);
 
-                      return (
-                        <div
-                          key={slotIndex}
-                          className="flex items-start gap-1"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="mt-6 h-0.5 w-3 shrink-0 rounded-full bg-border"
-                          />
-                          <div className="flex w-[4.5rem] shrink-0 flex-col items-center sm:w-20">
-                            <div
-                              className={`relative flex h-14 w-full flex-col items-center justify-center rounded-lg border shadow-sm ${
-                                passenger
-                                  ? "border-primary/30 bg-primary-light/40"
-                                  : "border-border bg-appBg"
-                              }`}
-                            >
-                              {passenger ? (
-                                <span className="text-lg leading-none">👤</span>
-                              ) : (
-                                <span className="text-[10px] text-text-secondary">
-                                  {slotIndex}
-                                </span>
-                              )}
-
-                              {!passenger && (
-                                <button
-                                  type="button"
-                                  className="absolute bottom-1 right-1 rounded bg-primary px-1 py-0.5 text-[10px] font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                                  disabled={
-                                    Boolean(disabledReason) || isJoining
-                                  }
-                                  onClick={() =>
-                                    onJoinSlot(car.id, slotIndex)
-                                  }
-                                  title={disabledReason ?? "跟車"}
+                            if (unit.type === "leader") {
+                              return (
+                                <div
+                                  key="leader"
+                                  className="flex items-start gap-1"
                                 >
-                                  {isJoining ? "..." : "跟車"}
-                                </button>
-                              )}
-                            </div>
+                                  <div className="flex w-14 shrink-0 flex-col items-center sm:w-16">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-full border border-primary/20 bg-primary-light text-xl sm:h-12 sm:w-12 sm:text-2xl">
+                                      🏄
+                                    </div>
+                                    <p className="mt-1 max-w-14 truncate text-center text-[11px] font-medium text-text-primary sm:max-w-16 sm:text-xs">
+                                      {leaderName}
+                                    </p>
+                                    <p className="text-[10px] text-text-secondary">
+                                      車長
+                                    </p>
+                                  </div>
+                                  {showConnector && (
+                                    <span
+                                      aria-hidden="true"
+                                      className="mt-5 h-0.5 w-2 shrink-0 rounded-full bg-border sm:w-3"
+                                    />
+                                  )}
+                                </div>
+                              );
+                            }
 
-                            {passenger ? (
-                              <div className="mt-1 flex w-full flex-col items-center gap-0.5">
-                                <p className="max-w-full truncate text-center text-[11px] font-medium text-text-primary">
-                                  {passengerProfile?.full_name || "未填姓名"}
-                                </p>
-                                <SurfLevelBadge
-                                  level={passengerProfile?.surf_level}
-                                />
-                                {isMine && (
-                                  <button
-                                    type="button"
-                                    className="mt-0.5 text-[10px] text-danger hover:underline disabled:opacity-40"
-                                    disabled={
-                                      leavingPassengerId === passenger.id
-                                    }
-                                    onClick={() => onLeaveSlot(passenger.id)}
+                            const slotIndex = unit.slotIndex;
+                            const passenger = passengersBySlot.get(slotIndex);
+                            const passengerProfile = passenger
+                              ? getMember(memberProfiles, passenger.user_id)
+                              : null;
+                            const isMine =
+                              passenger?.user_id === currentUserId &&
+                              Boolean(passenger);
+                            const slotTaken = Boolean(passenger);
+                            const joinable = canJoinSlot(slotTaken);
+                            const joinKey = `${car.id}-${slotIndex}`;
+                            const removeKey = `${car.id}-${slotIndex}`;
+                            const isJoining = joiningKey === joinKey;
+                            const isRemoving = removingSlotKey === removeKey;
+                            const isLastSlot = slotIndex === car.capacity;
+
+                            return (
+                              <div
+                                key={slotIndex}
+                                className="flex items-start gap-1"
+                              >
+                                <div className="flex w-14 shrink-0 flex-col items-center sm:w-16">
+                                  <div
+                                    className={`relative flex h-12 w-full flex-col items-center justify-center rounded-lg border shadow-sm sm:h-14 ${
+                                      passenger
+                                        ? "border-primary/30 bg-primary-light/40"
+                                        : "border-border bg-appBg"
+                                    }`}
                                   >
-                                    {leavingPassengerId === passenger.id
-                                      ? "取消中..."
-                                      : "取消跟車"}
-                                  </button>
+                                    {isTripActivityLeader && (
+                                      <button
+                                        type="button"
+                                        aria-label={`移除車廂 ${slotIndex}`}
+                                        className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-danger/30 bg-danger-light text-[10px] font-bold leading-none text-danger hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-40 sm:h-5 sm:w-5"
+                                        disabled={isRemoving}
+                                        onClick={() =>
+                                          onRemoveSlot(car.id, slotIndex)
+                                        }
+                                        title={
+                                          !isLastSlot
+                                            ? "請先從最後一個空車廂開始移除。"
+                                            : passenger
+                                              ? "此車廂已有跟車者，無法移除。"
+                                              : "移除車廂"
+                                        }
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+
+                                    {passenger ? (
+                                      <span className="text-base leading-none sm:text-lg">
+                                        👤
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-text-secondary">
+                                        {slotIndex}
+                                      </span>
+                                    )}
+
+                                    {!passenger && (
+                                      <button
+                                        type="button"
+                                        className="absolute bottom-1 right-1 rounded bg-primary px-1 py-0.5 text-[10px] font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                                        disabled={!joinable || isJoining}
+                                        onClick={() =>
+                                          onJoinSlot(car.id, slotIndex)
+                                        }
+                                        title={statusLabel ?? "跟車"}
+                                      >
+                                        {isJoining ? "..." : "跟車"}
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {passenger ? (
+                                    <div className="mt-1 flex w-full flex-col items-center gap-0.5">
+                                      <p className="max-w-full truncate text-center text-[10px] font-medium text-text-primary sm:text-[11px]">
+                                        {passengerProfile?.full_name ||
+                                          "未填姓名"}
+                                      </p>
+                                      <span className="scale-90 origin-top">
+                                        <SurfLevelBadge
+                                          level={passengerProfile?.surf_level}
+                                        />
+                                      </span>
+                                      {isMine && (
+                                        <button
+                                          type="button"
+                                          className="mt-0.5 text-[10px] text-danger hover:underline disabled:opacity-40"
+                                          disabled={
+                                            leavingPassengerId === passenger.id
+                                          }
+                                          onClick={() =>
+                                            onLeaveSlot(passenger.id)
+                                          }
+                                        >
+                                          {leavingPassengerId === passenger.id
+                                            ? "取消中..."
+                                            : "取消跟車"}
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    statusLabel && (
+                                      <p className="mt-1 text-center text-[10px] text-text-secondary">
+                                        {statusLabel}
+                                      </p>
+                                    )
+                                  )}
+                                </div>
+                                {showConnector && (
+                                  <span
+                                    aria-hidden="true"
+                                    className="mt-5 h-0.5 w-2 shrink-0 rounded-full bg-border sm:w-3"
+                                  />
                                 )}
                               </div>
-                            ) : (
-                              disabledReason && (
-                                <p className="mt-1 text-center text-[10px] text-text-secondary">
-                                  {disabledReason}
-                                </p>
-                              )
-                            )}
-                          </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        {hasNextRow && (
+                          <div
+                            aria-hidden="true"
+                            className={`mt-1 flex ${
+                              isRtl ? "justify-start" : "justify-end"
+                            }`}
+                          >
+                            <span className="h-3 w-0.5 rounded-full bg-border" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );

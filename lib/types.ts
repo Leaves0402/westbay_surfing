@@ -101,6 +101,14 @@ export type SurfTripCarPassenger = {
   created_at: string;
 };
 
+export type SurfTripMessage = {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  message: string;
+  created_at: string;
+};
+
 export const profileSelectColumns =
   "id, email, full_name, student_id, surf_level, requested_surf_level, requested_surf_level_at, role, created_at";
 
