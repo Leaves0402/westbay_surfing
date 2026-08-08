@@ -4,13 +4,11 @@ import type {
   SurfboardFormData,
   SurfboardImage,
   SurfboardSuitabilityLevel,
-  SurfboardUsageLevel,
   SurfboardWithImages,
 } from "@/lib/types";
 import {
   surfboardBoardTypeOptions,
   surfboardSuitabilityLevelOptions,
-  surfboardUsageLevelOptions,
 } from "@/lib/types";
 
 export const SURFBOARD_IMAGES_BUCKET = "surfboard-images";
@@ -25,7 +23,7 @@ export const ALLOWED_SURFBOARD_IMAGE_TYPES = [
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60;
 
 const surfboardSelectColumns =
-  "id, name, suitability_level, board_types, buoyancy, length, usage_level, description, created_by, created_at, updated_at";
+  "id, name, suitability_level, board_types, buoyancy, length, description, created_by, created_at, updated_at";
 
 const surfboardImageSelectColumns =
   "id, surfboard_id, storage_path, sort_order, created_at";
@@ -36,9 +34,8 @@ export type ParsedSurfboardValues = {
   name: string;
   suitability_level: SurfboardSuitabilityLevel;
   board_types: SurfboardBoardType[];
-  buoyancy: number;
-  length: number;
-  usage_level: SurfboardUsageLevel;
+  buoyancy: number | null;
+  length: string | null;
   description: string | null;
 };
 
@@ -53,6 +50,29 @@ export type SurfboardEditorImage =
   | { kind: "new"; file: File; previewUrl: string };
 
 const decimalNumberPattern = /^\d+(\.\d+)?$/;
+
+/** 長度使用呎吋格式，例如 5'4（五呎四吋）或 9（九呎整）。 */
+const feetInchesPattern = /^(\d{1,2})(?:['’](\d{1,2})["”]?)?$/;
+
+/**
+ * 將使用者輸入的長度正規化成 5'4 或 9 的格式，格式錯誤時回傳 null。
+ */
+export function normalizeSurfboardLength(input: string): string | null {
+  const match = feetInchesPattern.exec(input.trim());
+  if (!match) return null;
+
+  const feet = Number(match[1]);
+  if (!Number.isInteger(feet) || feet < 1 || feet > 20) return null;
+
+  if (match[2] === undefined) {
+    return String(feet);
+  }
+
+  const inches = Number(match[2]);
+  if (!Number.isInteger(inches) || inches < 0 || inches > 11) return null;
+
+  return inches === 0 ? String(feet) : `${feet}'${inches}`;
+}
 
 export function validateSurfboardForm(
   form: SurfboardFormData
@@ -80,26 +100,36 @@ export function validateSurfboardForm(
     return { values: null, error: "板型選項不正確。" };
   }
 
+  // 浮力與長度可留空，留空時存為 null，畫面顯示「未知」。
   const buoyancyInput = form.buoyancy.trim();
-  if (!buoyancyInput || !decimalNumberPattern.test(buoyancyInput)) {
-    return { values: null, error: "浮力請輸入數字，例如 45 或 45.5（單位 L）。" };
-  }
-  const buoyancy = Number(buoyancyInput);
-  if (!Number.isFinite(buoyancy) || buoyancy <= 0 || buoyancy > 999) {
-    return { values: null, error: "浮力必須介於 0 到 999 公升（L）之間。" };
+  let buoyancy: number | null = null;
+
+  if (buoyancyInput) {
+    if (!decimalNumberPattern.test(buoyancyInput)) {
+      return {
+        values: null,
+        error: "浮力請輸入數字，例如 45 或 45.5（單位 L），或留空表示未知。",
+      };
+    }
+
+    buoyancy = Number(buoyancyInput);
+    if (!Number.isFinite(buoyancy) || buoyancy <= 0 || buoyancy > 999) {
+      return { values: null, error: "浮力必須介於 0 到 999 公升（L）之間。" };
+    }
   }
 
   const lengthInput = form.length.trim();
-  if (!lengthInput || !decimalNumberPattern.test(lengthInput)) {
-    return { values: null, error: "長度請輸入數字，例如 6 或 9.2（單位 呎）。" };
-  }
-  const length = Number(lengthInput);
-  if (!Number.isFinite(length) || length <= 0 || length > 20) {
-    return { values: null, error: "長度必須介於 0 到 20 呎（ft）之間。" };
-  }
+  let length: string | null = null;
 
-  if (!surfboardUsageLevelOptions.includes(form.usage_level)) {
-    return { values: null, error: "請選擇使用程度。" };
+  if (lengthInput) {
+    length = normalizeSurfboardLength(lengthInput);
+    if (!length) {
+      return {
+        values: null,
+        error:
+          "長度請使用呎吋格式，例如 5'4（五呎四吋）或 9（九呎），或留空表示未知。",
+      };
+    }
   }
 
   const description = form.description.trim();
@@ -114,7 +144,6 @@ export function validateSurfboardForm(
       board_types: form.board_types,
       buoyancy,
       length,
-      usage_level: form.usage_level,
       description: description || null,
     },
     error: null,
@@ -278,7 +307,6 @@ export async function createSurfboard(input: {
       board_types: values.board_types,
       buoyancy: values.buoyancy,
       length: values.length,
-      usage_level: values.usage_level,
       description: values.description,
       created_by: userId,
     })
@@ -360,7 +388,6 @@ export async function updateSurfboard(input: {
       board_types: values.board_types,
       buoyancy: values.buoyancy,
       length: values.length,
-      usage_level: values.usage_level,
       description: values.description,
       updated_at: new Date().toISOString(),
     })

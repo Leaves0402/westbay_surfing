@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  ImageOff,
   Pencil,
   Plus,
   Save,
@@ -20,6 +18,7 @@ import {
   SurfboardImageCarousel,
   type CarouselImage,
 } from "@/components/rentals/SurfboardImageCarousel";
+import { getSurfLevelTone } from "@/lib/badgeTones";
 import {
   createSurfboard,
   deleteSurfboard,
@@ -34,7 +33,7 @@ import type { SurfboardFormData, SurfboardWithImages } from "@/lib/types";
 import {
   surfboardBoardTypeOptions,
   surfboardSuitabilityLevelOptions,
-  surfboardUsageLevelOptions,
+  surfboardUnknownValueText,
 } from "@/lib/types";
 
 type Notice = {
@@ -56,7 +55,6 @@ function makeFormFromBoard(board: SurfboardWithImages | null): SurfboardFormData
       board_types: [],
       buoyancy: "",
       length: "",
-      usage_level: "全新",
       description: "",
     };
   }
@@ -65,9 +63,8 @@ function makeFormFromBoard(board: SurfboardWithImages | null): SurfboardFormData
     name: board.name,
     suitability_level: board.suitability_level,
     board_types: [...board.board_types],
-    buoyancy: String(board.buoyancy),
-    length: String(board.length),
-    usage_level: board.usage_level,
+    buoyancy: board.buoyancy === null ? "" : String(board.buoyancy),
+    length: board.length ?? "",
     description: board.description ?? "",
   };
 }
@@ -77,10 +74,6 @@ function makeEditorImagesFromBoard(
 ): SurfboardEditorImage[] {
   if (!board) return [];
   return board.images.map((image) => ({ kind: "existing", image }));
-}
-
-function getEditorImageKey(item: SurfboardEditorImage) {
-  return item.kind === "existing" ? item.image.id : item.previewUrl;
 }
 
 function revokeNewImagePreviews(items: SurfboardEditorImage[]) {
@@ -118,13 +111,11 @@ export function SurfboardDialog({
   const [editorImages, setEditorImages] = useState<SurfboardEditorImage[]>(
     () => makeEditorImagesFromBoard(board)
   );
+  const [editorImageIndex, setEditorImageIndex] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [failedThumbKeys, setFailedThumbKeys] = useState<
-    Record<string, boolean>
-  >({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorImagesRef = useRef<SurfboardEditorImage[]>([]);
@@ -169,6 +160,7 @@ export function SurfboardDialog({
     if (!board) return;
     setForm(makeFormFromBoard(board));
     setEditorImages(makeEditorImagesFromBoard(board));
+    setEditorImageIndex(0);
     setNotice(null);
     setIsEditing(true);
   };
@@ -183,6 +175,7 @@ export function SurfboardDialog({
     revokeNewImagePreviews(editorImages);
     setForm(makeFormFromBoard(board));
     setEditorImages(makeEditorImagesFromBoard(board));
+    setEditorImageIndex(0);
     setNotice(null);
     setIsEditing(false);
   };
@@ -215,6 +208,7 @@ export function SurfboardDialog({
 
     if (additions.length > 0) {
       setEditorImages((current) => [...current, ...additions]);
+      setEditorImageIndex(editorImages.length);
     }
 
     setNotice(error ? { tone: "danger", text: error } : null);
@@ -224,7 +218,9 @@ export function SurfboardDialog({
     }
   };
 
-  const removeEditorImage = (index: number) => {
+  const removeCurrentEditorImage = () => {
+    const index = editorImageIndex;
+
     setEditorImages((current) => {
       const target = current[index];
       if (target?.kind === "new") {
@@ -232,17 +228,21 @@ export function SurfboardDialog({
       }
       return current.filter((_, itemIndex) => itemIndex !== index);
     });
+
+    setEditorImageIndex((current) => Math.max(current - 1, 0));
   };
 
-  const moveEditorImage = (index: number, offset: -1 | 1) => {
-    setEditorImages((current) => {
-      const targetIndex = index + offset;
-      if (targetIndex < 0 || targetIndex >= current.length) return current;
+  const moveCurrentEditorImage = (offset: -1 | 1) => {
+    const index = editorImageIndex;
+    const targetIndex = index + offset;
+    if (targetIndex < 0 || targetIndex >= editorImages.length) return;
 
+    setEditorImages((current) => {
       const next = [...current];
       [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
       return next;
     });
+    setEditorImageIndex(targetIndex);
   };
 
   const handleSave = async () => {
@@ -354,16 +354,31 @@ export function SurfboardDialog({
     await onDeleted(result.warning ?? "衝浪板已移除。");
   };
 
-  // 檢視模式資料同步：儲存後由外層重新載入的 board 直接更新畫面。
   const viewBoard = board;
 
-  const carouselImages: CarouselImage[] = (viewBoard?.images ?? []).map(
+  const viewCarouselImages: CarouselImage[] = (viewBoard?.images ?? []).map(
     (image, index) => ({
       key: image.id,
       url: imageUrls[image.storage_path] ?? null,
       alt: `衝浪板「${viewBoard?.name ?? ""}」的第 ${index + 1} 張圖片`,
     })
   );
+
+  const editorCarouselImages: CarouselImage[] = editorImages.map(
+    (item, index) => ({
+      key: item.kind === "existing" ? item.image.id : item.previewUrl,
+      url:
+        item.kind === "existing"
+          ? (imageUrls[item.image.storage_path] ?? null)
+          : item.previewUrl,
+      alt: `第 ${index + 1} 張圖片預覽`,
+    })
+  );
+
+  const safeEditorIndex =
+    editorImages.length === 0
+      ? 0
+      : Math.min(editorImageIndex, editorImages.length - 1);
 
   const title = isCreateMode
     ? "新增衝浪板"
@@ -477,94 +492,72 @@ export function SurfboardDialog({
                     圖片（最少 1 張、最多 {MAX_SURFBOARD_IMAGES} 張）
                   </p>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    {editorImages.map((item, index) => {
-                      const key = getEditorImageKey(item);
-                      const url =
-                        item.kind === "existing"
-                          ? (imageUrls[item.image.storage_path] ?? null)
-                          : item.previewUrl;
+                  <SurfboardImageCarousel
+                    images={editorCarouselImages}
+                    activeIndex={safeEditorIndex}
+                    onActiveIndexChange={setEditorImageIndex}
+                    emptyLabel="尚未加入圖片"
+                    overlay={
+                      editorImages.length > 0 ? (
+                        <button
+                          type="button"
+                          aria-label={`移除第 ${safeEditorIndex + 1} 張圖片`}
+                          title="移除這張圖片"
+                          onClick={removeCurrentEditorImage}
+                          disabled={isBusy}
+                          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-danger disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <X size={14} />
+                        </button>
+                      ) : null
+                    }
+                  />
 
-                      return (
-                        <div key={key}>
-                          <div className="relative aspect-square overflow-hidden rounded-xl border border-border bg-bg">
-                            {url && !failedThumbKeys[key] ? (
-                              <Image
-                                src={url}
-                                alt={`第 ${index + 1} 張圖片預覽`}
-                                fill
-                                unoptimized
-                                className="object-cover"
-                                onError={() =>
-                                  setFailedThumbKeys((prev) => ({
-                                    ...prev,
-                                    [key]: true,
-                                  }))
-                                }
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-slate-400">
-                                <ImageOff size={18} strokeWidth={1.5} />
-                              </div>
-                            )}
-
-                            <button
-                              type="button"
-                              aria-label={`移除第 ${index + 1} 張圖片`}
-                              title="移除圖片"
-                              onClick={() => removeEditorImage(index)}
-                              disabled={isBusy}
-                              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-danger disabled:opacity-40"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-
-                          <div className="mt-1.5 flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              aria-label={`將第 ${index + 1} 張圖片往前移`}
-                              title="往前移"
-                              onClick={() => moveEditorImage(index, -1)}
-                              disabled={isBusy || index === 0}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-slate-500 transition hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              <ChevronLeft size={14} />
-                            </button>
-                            <span className="text-xs text-slate-500">
-                              {index + 1}
-                            </span>
-                            <button
-                              type="button"
-                              aria-label={`將第 ${index + 1} 張圖片往後移`}
-                              title="往後移"
-                              onClick={() => moveEditorImage(index, 1)}
-                              disabled={
-                                isBusy || index === editorImages.length - 1
-                              }
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-slate-500 transition hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              <ChevronRight size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {editorImages.length < MAX_SURFBOARD_IMAGES && (
+                  {editorImages.length > 0 && (
+                    <div className="mt-3 flex items-center justify-center gap-2">
                       <button
                         type="button"
-                        aria-label="新增圖片"
-                        title="新增圖片"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isBusy}
-                        className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-slate-400 transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label="將這張圖片往前移"
+                        title="往前移"
+                        onClick={() => moveCurrentEditorImage(-1)}
+                        disabled={isBusy || safeEditorIndex === 0}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-slate-500 transition hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        <Plus size={20} />
-                        <span className="text-xs">新增圖片</span>
+                        <ChevronLeft size={14} />
                       </button>
-                    )}
-                  </div>
+                      <span className="text-xs text-slate-500">
+                        第 {safeEditorIndex + 1} / {editorImages.length} 張
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="將這張圖片往後移"
+                        title="往後移"
+                        onClick={() => moveCurrentEditorImage(1)}
+                        disabled={
+                          isBusy || safeEditorIndex === editorImages.length - 1
+                        }
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-slate-500 transition hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    fullWidth
+                    className="mt-3 !min-h-9 !text-xs"
+                    icon={<Plus size={14} />}
+                    title="新增圖片"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={
+                      isBusy || editorImages.length >= MAX_SURFBOARD_IMAGES
+                    }
+                  >
+                    {editorImages.length >= MAX_SURFBOARD_IMAGES
+                      ? `已達 ${MAX_SURFBOARD_IMAGES} 張上限`
+                      : "新增圖片"}
+                  </Button>
 
                   <input
                     ref={fileInputRef}
@@ -581,7 +574,7 @@ export function SurfboardDialog({
                   </p>
                 </div>
               ) : (
-                <SurfboardImageCarousel images={carouselImages} />
+                <SurfboardImageCarousel images={viewCarouselImages} />
               )}
             </div>
 
@@ -599,7 +592,7 @@ export function SurfboardDialog({
                           name: event.target.value,
                         }))
                       }
-                      placeholder="例如：藍白軟板 8'0"
+                      placeholder="例如：藍白軟板"
                       className={fieldControlClasses}
                       disabled={isBusy}
                     />
@@ -658,7 +651,10 @@ export function SurfboardDialog({
                     </div>
                   </div>
 
-                  <FormField label="浮力（L）" hint="單位：公升（L），例如 45.5">
+                  <FormField
+                    label="浮力（L）"
+                    hint={`單位：公升（L），例如 45.5；留空顯示「${surfboardUnknownValueText}」`}
+                  >
                     <input
                       type="text"
                       inputMode="decimal"
@@ -669,16 +665,18 @@ export function SurfboardDialog({
                           buoyancy: event.target.value,
                         }))
                       }
-                      placeholder="例如 45.5"
+                      placeholder="例如 45.5，可留空"
                       className={fieldControlClasses}
                       disabled={isBusy}
                     />
                   </FormField>
 
-                  <FormField label="長度（呎）" hint="單位：呎（ft），例如 6 或 9.2">
+                  <FormField
+                    label="長度（呎吋）"
+                    hint={`格式：呎'吋，例如 5'4 代表五呎四吋；留空顯示「${surfboardUnknownValueText}」`}
+                  >
                     <input
                       type="text"
-                      inputMode="decimal"
                       value={form.length}
                       onChange={(event) =>
                         setForm((current) => ({
@@ -686,31 +684,10 @@ export function SurfboardDialog({
                           length: event.target.value,
                         }))
                       }
-                      placeholder="例如 6 或 9.2"
+                      placeholder="例如 5'4 或 9，可留空"
                       className={fieldControlClasses}
                       disabled={isBusy}
                     />
-                  </FormField>
-
-                  <FormField label="使用程度">
-                    <select
-                      value={form.usage_level}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          usage_level: event.target
-                            .value as SurfboardFormData["usage_level"],
-                        }))
-                      }
-                      className={fieldControlClasses}
-                      disabled={isBusy}
-                    >
-                      {surfboardUsageLevelOptions.map((level) => (
-                        <option key={level} value={level}>
-                          {level}
-                        </option>
-                      ))}
-                    </select>
                   </FormField>
 
                   <FormField label="說明">
@@ -742,7 +719,11 @@ export function SurfboardDialog({
                     <div>
                       <dt className="text-xs text-slate-500">適合程度</dt>
                       <dd className="mt-1">
-                        <Badge tone="info">{viewBoard.suitability_level}</Badge>
+                        <Badge
+                          tone={getSurfLevelTone(viewBoard.suitability_level)}
+                        >
+                          {viewBoard.suitability_level}
+                        </Badge>
                       </dd>
                     </div>
 
@@ -761,22 +742,17 @@ export function SurfboardDialog({
                       <div>
                         <dt className="text-xs text-slate-500">浮力</dt>
                         <dd className="mt-0.5 font-medium text-slate-800">
-                          {viewBoard.buoyancy} L
+                          {viewBoard.buoyancy === null
+                            ? surfboardUnknownValueText
+                            : `${viewBoard.buoyancy} L`}
                         </dd>
                       </div>
                       <div>
                         <dt className="text-xs text-slate-500">長度</dt>
                         <dd className="mt-0.5 font-medium text-slate-800">
-                          {viewBoard.length} 呎
+                          {viewBoard.length ?? surfboardUnknownValueText}
                         </dd>
                       </div>
-                    </div>
-
-                    <div>
-                      <dt className="text-xs text-slate-500">使用程度</dt>
-                      <dd className="mt-1">
-                        <Badge tone="neutral">{viewBoard.usage_level}</Badge>
-                      </dd>
                     </div>
 
                     <div>
