@@ -95,18 +95,41 @@ execute function public.enforce_rental_slot_schedule();
 -- 3. 衝浪程度等級比較
 -- ---------------------------------------------------------------------------
 
-create or replace function public.surf_level_rank(target_level text)
-returns integer
-language sql
-immutable
-as $$
-  select case target_level
-    when '初階' then 1
-    when '中階' then 2
-    when '中進階' then 3
-    when '進階' then 4
-    else 0
-  end;
+-- 專案資料庫可能已經有 public.surf_level_rank(text)（參數名為 level）。
+-- create or replace 無法改參數名稱，也不應覆蓋既有函式（可能有其他功能依賴），
+-- 因此只在函式不存在時才建立。
+do $$
+begin
+  if to_regprocedure('public.surf_level_rank(text)') is null then
+    create function public.surf_level_rank(level text)
+    returns integer
+    language sql
+    immutable
+    as $fn$
+      select case level
+        when '初階' then 1
+        when '中階' then 2
+        when '中進階' then 3
+        when '進階' then 4
+        else 0
+      end;
+    $fn$;
+  end if;
+end
+$$;
+
+-- 確認等級排序符合預期，避免既有函式語意不同導致程度判斷錯誤。
+do $$
+begin
+  if not (
+    public.surf_level_rank('初階') < public.surf_level_rank('中階')
+    and public.surf_level_rank('中階') < public.surf_level_rank('中進階')
+    and public.surf_level_rank('中進階') < public.surf_level_rank('進階')
+  ) then
+    raise exception
+      'public.surf_level_rank(text) 的等級排序不符合預期（初階 < 中階 < 中進階 < 進階），請確認函式定義。';
+  end if;
+end
 $$;
 
 -- ---------------------------------------------------------------------------
