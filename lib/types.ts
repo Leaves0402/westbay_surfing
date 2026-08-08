@@ -119,6 +119,76 @@ export type SurfTripWaitlistEntry = {
   created_at: string;
 };
 
+export type SurfboardSuitabilityLevel =
+  | "初階"
+  | "初中階"
+  | "中階"
+  | "中高階"
+  | "進階";
+
+export type SurfboardBoardType = "軟板" | "硬板" | "長板" | "短板" | "中長板";
+
+export type SurfboardUsageLevel = "全新" | "輕度使用" | "中度使用" | "重度使用";
+
+export type Surfboard = {
+  id: string;
+  name: string;
+  suitability_level: SurfboardSuitabilityLevel;
+  board_types: SurfboardBoardType[];
+  buoyancy: number;
+  length: number;
+  usage_level: SurfboardUsageLevel;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SurfboardImage = {
+  id: string;
+  surfboard_id: string;
+  storage_path: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type SurfboardWithImages = Surfboard & {
+  images: SurfboardImage[];
+};
+
+export type SurfboardFormData = {
+  name: string;
+  suitability_level: SurfboardSuitabilityLevel;
+  board_types: SurfboardBoardType[];
+  buoyancy: string;
+  length: string;
+  usage_level: SurfboardUsageLevel;
+  description: string;
+};
+
+export const surfboardSuitabilityLevelOptions: SurfboardSuitabilityLevel[] = [
+  "初階",
+  "初中階",
+  "中階",
+  "中高階",
+  "進階",
+];
+
+export const surfboardBoardTypeOptions: SurfboardBoardType[] = [
+  "軟板",
+  "硬板",
+  "長板",
+  "短板",
+  "中長板",
+];
+
+export const surfboardUsageLevelOptions: SurfboardUsageLevel[] = [
+  "全新",
+  "輕度使用",
+  "中度使用",
+  "重度使用",
+];
+
 export type Lesson = {
   id: string;
   lesson_date: string;

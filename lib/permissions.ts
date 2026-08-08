@@ -60,6 +60,15 @@ export function canMarkRentalPaid(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }
 
+// 衝浪板管理：只有幹部以上（officer、admin）可以查看與管理。
+export function canViewSurfboards(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
+export function canManageSurfboards(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
 export function canViewMembers(input: RoleInput) {
   return canUseMemberFeatures(input);
 }
