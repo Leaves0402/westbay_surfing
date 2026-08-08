@@ -51,6 +51,8 @@ export type RentalRegistration = {
   id: string;
   rental_slot_id: string;
   user_id: string;
+  /** 登記時挑選的衝浪板；本功能上線前的舊資料為 null。 */
+  surfboard_id: string | null;
   is_paid: boolean;
   paid_at?: string | null;
   paid_by?: string | null;
