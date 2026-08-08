@@ -60,13 +60,21 @@ export function canMarkRentalPaid(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }
 
-// 衝浪板管理：只有幹部以上（officer、admin）可以查看與管理。
+// 衝浪板管理區塊：只有幹部以上（officer、admin）可以查看與管理。
 export function canViewSurfboards(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }
 
 export function canManageSurfboards(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
+}
+
+/**
+ * 瀏覽衝浪板：有租板權限的正式身分都可以讀取板子資料並在登記時挑選，
+ * 但不會因此看到「衝浪板管理」區塊（新增、編輯、移除仍限 officer、admin）。
+ */
+export function canBrowseSurfboards(input: RoleInput) {
+  return canUseMemberFeatures(input);
 }
 
 export function canViewMembers(input: RoleInput) {

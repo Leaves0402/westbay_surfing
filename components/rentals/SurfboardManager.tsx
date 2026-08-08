@@ -202,7 +202,7 @@ export function SurfboardManager({ userId }: { userId: string }) {
               <span className="invisible mt-2 block truncate text-sm font-semibold">
                 佔位
               </span>
-              <span className="invisible mt-0.5 block truncate text-xs">
+              <span className="invisible mt-1 block truncate px-2.5 py-1 text-xs">
                 佔位
               </span>
             </button>
