@@ -11,14 +11,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
+import { SurfboardDetailView } from "@/components/rentals/SurfboardDetailView";
 import {
   SurfboardImageCarousel,
   type CarouselImage,
 } from "@/components/rentals/SurfboardImageCarousel";
-import { getSurfLevelTone } from "@/lib/badgeTones";
 import {
   createSurfboard,
   deleteSurfboard,
@@ -36,8 +35,10 @@ import {
   surfboardUnknownValueText,
 } from "@/lib/types";
 
+type DialogNoticeTone = "success" | "danger" | "warning";
+
 type Notice = {
-  tone: "success" | "danger" | "warning";
+  tone: DialogNoticeTone;
   text: string;
 };
 
@@ -356,14 +357,6 @@ export function SurfboardDialog({
 
   const viewBoard = board;
 
-  const viewCarouselImages: CarouselImage[] = (viewBoard?.images ?? []).map(
-    (image, index) => ({
-      key: image.id,
-      url: imageUrls[image.storage_path] ?? null,
-      alt: `衝浪板「${viewBoard?.name ?? ""}」的第 ${index + 1} 張圖片`,
-    })
-  );
-
   const editorCarouselImages: CarouselImage[] = editorImages.map(
     (item, index) => ({
       key: item.kind === "existing" ? item.image.id : item.previewUrl,
@@ -484,9 +477,9 @@ export function SurfboardDialog({
             </p>
           )}
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <div>
-              {isEditing ? (
+          {isEditing ? (
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
                 <div>
                   <p className="mb-2 text-sm font-medium text-slate-700">
                     圖片（最少 1 張、最多 {MAX_SURFBOARD_IMAGES} 張）
@@ -573,13 +566,9 @@ export function SurfboardDialog({
                     MB。第 1 張會作為列表封面。
                   </p>
                 </div>
-              ) : (
-                <SurfboardImageCarousel images={viewCarouselImages} />
-              )}
-            </div>
+              </div>
 
-            <div>
-              {isEditing ? (
+              <div>
                 <div className="grid gap-4">
                   <FormField label="衝浪板名稱">
                     <input
@@ -706,66 +695,13 @@ export function SurfboardDialog({
                     />
                   </FormField>
                 </div>
-              ) : (
-                viewBoard && (
-                  <dl className="grid gap-4 text-sm">
-                    <div>
-                      <dt className="text-xs text-slate-500">衝浪板名稱</dt>
-                      <dd className="mt-0.5 text-base font-semibold text-slate-900">
-                        {viewBoard.name}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-xs text-slate-500">適合程度</dt>
-                      <dd className="mt-1">
-                        <Badge
-                          tone={getSurfLevelTone(viewBoard.suitability_level)}
-                        >
-                          {viewBoard.suitability_level}
-                        </Badge>
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-xs text-slate-500">板型</dt>
-                      <dd className="mt-1 flex flex-wrap gap-1.5">
-                        {viewBoard.board_types.map((boardType) => (
-                          <Badge key={boardType} tone="primary">
-                            {boardType}
-                          </Badge>
-                        ))}
-                      </dd>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <dt className="text-xs text-slate-500">浮力</dt>
-                        <dd className="mt-0.5 font-medium text-slate-800">
-                          {viewBoard.buoyancy === null
-                            ? surfboardUnknownValueText
-                            : `${viewBoard.buoyancy} L`}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-slate-500">長度</dt>
-                        <dd className="mt-0.5 font-medium text-slate-800">
-                          {viewBoard.length ?? surfboardUnknownValueText}
-                        </dd>
-                      </div>
-                    </div>
-
-                    <div>
-                      <dt className="text-xs text-slate-500">說明</dt>
-                      <dd className="mt-0.5 whitespace-pre-wrap leading-6 text-slate-700">
-                        {viewBoard.description || "未填寫"}
-                      </dd>
-                    </div>
-                  </dl>
-                )
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            viewBoard && (
+              <SurfboardDetailView board={viewBoard} imageUrls={imageUrls} />
+            )
+          )}
         </div>
 
         {showDeleteConfirm && viewBoard && (
