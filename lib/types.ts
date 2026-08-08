@@ -119,76 +119,6 @@ export type SurfTripWaitlistEntry = {
   created_at: string;
 };
 
-export type SurfboardSuitabilityLevel =
-  | "初階"
-  | "初中階"
-  | "中階"
-  | "中高階"
-  | "進階";
-
-export type SurfboardBoardType = "軟板" | "硬板" | "長板" | "短板" | "中長板";
-
-export type SurfboardUsageLevel = "全新" | "輕度使用" | "中度使用" | "重度使用";
-
-export type Surfboard = {
-  id: string;
-  name: string;
-  suitability_level: SurfboardSuitabilityLevel;
-  board_types: SurfboardBoardType[];
-  buoyancy: number;
-  length: number;
-  usage_level: SurfboardUsageLevel;
-  description: string | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type SurfboardImage = {
-  id: string;
-  surfboard_id: string;
-  storage_path: string;
-  sort_order: number;
-  created_at: string;
-};
-
-export type SurfboardWithImages = Surfboard & {
-  images: SurfboardImage[];
-};
-
-export type SurfboardFormData = {
-  name: string;
-  suitability_level: SurfboardSuitabilityLevel;
-  board_types: SurfboardBoardType[];
-  buoyancy: string;
-  length: string;
-  usage_level: SurfboardUsageLevel;
-  description: string;
-};
-
-export const surfboardSuitabilityLevelOptions: SurfboardSuitabilityLevel[] = [
-  "初階",
-  "初中階",
-  "中階",
-  "中高階",
-  "進階",
-];
-
-export const surfboardBoardTypeOptions: SurfboardBoardType[] = [
-  "軟板",
-  "硬板",
-  "長板",
-  "短板",
-  "中長板",
-];
-
-export const surfboardUsageLevelOptions: SurfboardUsageLevel[] = [
-  "全新",
-  "輕度使用",
-  "中度使用",
-  "重度使用",
-];
-
 export type Lesson = {
   id: string;
   lesson_date: string;
@@ -295,3 +225,57 @@ export const surfLevelDescriptions: Array<{
     description: "已能穩定掌握浪板控制，有自己的板子，開始練習動作。",
   },
 ];
+
+/** 衝浪板適合程度與社員衝浪程度使用同一套等級。 */
+export type SurfboardSuitabilityLevel = SurfLevel;
+
+export type SurfboardBoardType = "軟板" | "硬板" | "長板" | "短板" | "中長板";
+
+export type Surfboard = {
+  id: string;
+  name: string;
+  suitability_level: SurfboardSuitabilityLevel;
+  board_types: SurfboardBoardType[];
+  /** 浮力，單位公升（L）；未填寫為 null。 */
+  buoyancy: number | null;
+  /** 長度，呎吋格式（例如 5'4）；未填寫為 null。 */
+  length: string | null;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SurfboardImage = {
+  id: string;
+  surfboard_id: string;
+  storage_path: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type SurfboardWithImages = Surfboard & {
+  images: SurfboardImage[];
+};
+
+export type SurfboardFormData = {
+  name: string;
+  suitability_level: SurfboardSuitabilityLevel;
+  board_types: SurfboardBoardType[];
+  buoyancy: string;
+  length: string;
+  description: string;
+};
+
+export const surfboardSuitabilityLevelOptions: SurfboardSuitabilityLevel[] =
+  surfLevelOptions;
+
+export const surfboardBoardTypeOptions: SurfboardBoardType[] = [
+  "軟板",
+  "硬板",
+  "長板",
+  "短板",
+  "中長板",
+];
+
+export const surfboardUnknownValueText = "未知";

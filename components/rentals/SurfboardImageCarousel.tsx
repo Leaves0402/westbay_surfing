@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import type { ReactNode } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
 
@@ -15,25 +16,42 @@ const SWIPE_THRESHOLD_PX = 40;
 export function SurfboardImageCarousel({
   images,
   className = "",
+  activeIndex,
+  onActiveIndexChange,
+  overlay,
+  emptyLabel = "沒有圖片",
 }: {
   images: CarouselImage[];
   className?: string;
+  /** 傳入時為受控模式，由外層管理目前顯示的圖片。 */
+  activeIndex?: number;
+  onActiveIndexChange?: (index: number) => void;
+  /** 疊在圖片上的額外控制項，例如編輯模式的移除按鈕。 */
+  overlay?: ReactNode;
+  emptyLabel?: string;
 }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [failedKeys, setFailedKeys] = useState<Record<string, boolean>>({});
+  const [uncontrolledIndex, setUncontrolledIndex] = useState(0);
   const touchStartXRef = useRef<number | null>(null);
 
-  const safeIndex = useMemo(
-    () => Math.min(activeIndex, Math.max(images.length - 1, 0)),
-    [activeIndex, images.length]
-  );
+  const isControlled = activeIndex !== undefined;
+  const rawIndex = isControlled ? activeIndex : uncontrolledIndex;
+  const safeIndex =
+    images.length === 0
+      ? 0
+      : Math.min(Math.max(rawIndex, 0), images.length - 1);
 
   const hasMultipleImages = images.length > 1;
   const current = images[safeIndex] ?? null;
 
   const goTo = (index: number) => {
     if (images.length === 0) return;
-    setActiveIndex((index + images.length) % images.length);
+
+    const next = ((index % images.length) + images.length) % images.length;
+    if (isControlled) {
+      onActiveIndexChange?.(next);
+      return;
+    }
+    setUncontrolledIndex(next);
   };
 
   const handleTouchStart = (event: React.TouchEvent) => {
@@ -67,23 +85,16 @@ export function SurfboardImageCarousel({
             : "衝浪板圖片"
         }
       >
-        {current && current.url && !failedKeys[current.key] ? (
-          <Image
-            src={current.url}
-            alt={current.alt}
-            fill
-            unoptimized
-            className="object-cover"
-            onError={() =>
-              setFailedKeys((prev) => ({ ...prev, [current.key]: true }))
-            }
+        {current ? (
+          <CarouselFrame
+            key={current.key}
+            image={current}
+            emptyLabel={emptyLabel}
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-400">
             <ImageOff size={28} strokeWidth={1.5} />
-            <span className="text-xs">
-              {current ? "圖片載入失敗" : "沒有圖片"}
-            </span>
+            <span className="text-xs">{emptyLabel}</span>
           </div>
         )}
 
@@ -109,6 +120,8 @@ export function SurfboardImageCarousel({
             </button>
           </>
         )}
+
+        {overlay}
       </div>
 
       {hasMultipleImages && (
@@ -119,7 +132,7 @@ export function SurfboardImageCarousel({
               type="button"
               aria-label={`切換到第 ${index + 1} 張圖片`}
               aria-current={index === safeIndex}
-              onClick={() => setActiveIndex(index)}
+              onClick={() => goTo(index)}
               className={`h-2.5 w-2.5 rounded-full transition-colors ${
                 index === safeIndex
                   ? "bg-primary"
@@ -130,5 +143,37 @@ export function SurfboardImageCarousel({
         </div>
       )}
     </div>
+  );
+}
+
+function CarouselFrame({
+  image,
+  emptyLabel,
+}: {
+  image: CarouselImage;
+  emptyLabel: string;
+}) {
+  const [hasFailed, setHasFailed] = useState(false);
+
+  if (!image.url || hasFailed) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-400">
+        <ImageOff size={28} strokeWidth={1.5} />
+        <span className="text-xs">
+          {image.url ? "圖片載入失敗" : emptyLabel}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      src={image.url}
+      alt={image.alt}
+      fill
+      unoptimized
+      className="object-cover"
+      onError={() => setHasFailed(true)}
+    />
   );
 }

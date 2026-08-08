@@ -48,7 +48,7 @@ export function SurfboardCard({
         {board.name}
       </p>
       <p className="mt-0.5 truncate text-xs text-slate-500">
-        使用程度：{board.usage_level}
+        適合程度：{board.suitability_level}
       </p>
     </button>
   );
