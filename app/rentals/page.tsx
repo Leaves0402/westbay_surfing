@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { SurfboardManager } from "@/components/rentals/SurfboardManager";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -29,6 +30,7 @@ import {
   canManageRentalSlots,
   canMarkRentalPaid,
   canViewRentals,
+  canViewSurfboards,
   canViewUnpaidRentals,
   userMeetsSurfLevel,
 } from "@/lib/permissions";
@@ -222,10 +224,20 @@ export default function RentalsPage() {
   const [newSlotMinSurfLevel, setNewSlotMinSurfLevel] = useState("");
   const [newSlotNote, setNewSlotNote] = useState("");
 
+  // 負責人預設為目前登入者（等使用者資料載入後補上）。
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id;
+    queueMicrotask(() =>
+      setNewSlotBoardManagerId((current) => current || userId)
+    );
+  }, [user]);
+
   const canView = canViewRentals(profile);
   const canManageSlots = canManageRentalSlots(profile);
   const canViewUnpaid = canViewUnpaidRentals(profile);
   const canMarkPaid = canMarkRentalPaid(profile);
+  const canSeeSurfboards = canViewSurfboards(profile);
 
   const today = useMemo(() => getTodayDate(), []);
 
@@ -429,6 +441,11 @@ export default function RentalsPage() {
       return;
     }
 
+    if (!newSlotBoardManagerId.trim()) {
+      setStatusMessage("請選擇負責人。");
+      return;
+    }
+
     setIsCreatingRentalSlot(true);
     setStatusMessage("");
 
@@ -438,7 +455,7 @@ export default function RentalsPage() {
       start_time: newSlotStartTime,
       end_time: newSlotEndTime,
       capacity,
-      board_manager_id: newSlotBoardManagerId || null,
+      board_manager_id: newSlotBoardManagerId,
       min_surf_level: newSlotMinSurfLevel || null,
       note: newSlotNote.trim() || null,
       is_open: true,
@@ -456,7 +473,7 @@ export default function RentalsPage() {
     setNewSlotStartTime("15:00");
     setNewSlotEndTime("17:00");
     setNewSlotCapacity("5");
-    setNewSlotBoardManagerId("");
+    setNewSlotBoardManagerId(user.id);
     setNewSlotMinSurfLevel("");
     setNewSlotNote("");
     setMonthCursor(parseLocalDate(newSlotDate));
@@ -813,27 +830,37 @@ export default function RentalsPage() {
                   </FormField>
 
                   <FormField label="負責人">
-                    <select
-                      value={newSlotBoardManagerId}
-                      onChange={(event) =>
-                        setNewSlotBoardManagerId(event.target.value)
-                      }
-                      className={fieldControlClasses}
-                    >
-                      <option value="">未指定負責人</option>
-                      {staffProfiles.map((staff) => {
-                        const info = formatResponsiblePerson(staff, "未填姓名");
-                        const label =
-                          typeof info === "string"
-                            ? info
-                            : `${roleLabels[info.role]}（${info.name}）`;
-                        return (
-                          <option key={staff.id} value={staff.id}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    {staffProfiles.length === 0 ? (
+                      <select
+                        value=""
+                        disabled
+                        aria-label="負責人載入中"
+                        className={fieldControlClasses}
+                      >
+                        <option value="">負責人名單載入中...</option>
+                      </select>
+                    ) : (
+                      <select
+                        value={newSlotBoardManagerId}
+                        onChange={(event) =>
+                          setNewSlotBoardManagerId(event.target.value)
+                        }
+                        className={fieldControlClasses}
+                      >
+                        {staffProfiles.map((staff) => {
+                          const info = formatResponsiblePerson(staff, "未填姓名");
+                          const label =
+                            typeof info === "string"
+                              ? info
+                              : `${roleLabels[info.role]}（${info.name}）`;
+                          return (
+                            <option key={staff.id} value={staff.id}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
                   </FormField>
 
                   <FormField label="最低衝浪程度">
@@ -875,6 +902,8 @@ export default function RentalsPage() {
                 </Button>
               </Card>
             )}
+
+            {canSeeSurfboards && <SurfboardManager userId={user.id} />}
 
             <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
               <Card className="p-0 overflow-hidden">
