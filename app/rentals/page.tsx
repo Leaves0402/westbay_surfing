@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { SurfboardManager } from "@/components/rentals/SurfboardManager";
+import { SurfboardPicker } from "@/components/rentals/SurfboardPicker";
+import { SurfboardThumbnail } from "@/components/rentals/SurfboardThumbnail";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -27,6 +29,7 @@ import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { getRoleTone, getSurfLevelTone } from "@/lib/badgeTones";
 import {
+  canBrowseSurfboards,
   canManageRentalSlots,
   canMarkRentalPaid,
   canViewRentals,
@@ -34,6 +37,16 @@ import {
   canViewUnpaidRentals,
   userMeetsSurfLevel,
 } from "@/lib/permissions";
+import {
+  formatRentalTime as formatTime,
+  getTaipeiTodayDate,
+  isRentalSlotExpired,
+  isRentalSlotStartInFuture,
+} from "@/lib/rentalSlots";
+import {
+  createSignedSurfboardImageUrls,
+  fetchSurfboards,
+} from "@/lib/surfboards";
 import { createClient } from "@/lib/supabase/client";
 import {
   roleLabels,
@@ -42,8 +55,12 @@ import {
   type PublicMemberProfile,
   type RentalRegistration,
   type RentalSlot,
+  type SurfboardWithImages,
 } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
+
+/** 畫面每 30 秒重新評估過期狀態，跨過開始時間時不需重新整理。 */
+const EXPIRATION_TICK_MS = 30_000;
 
 const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
 
@@ -60,12 +77,6 @@ type ResponsibleProfile = Pick<
   Profile,
   "id" | "email" | "full_name" | "student_id" | "surf_level" | "role"
 >;
-
-function getTodayDate() {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 10);
-}
 
 function parseLocalDate(dateString: string) {
   return new Date(`${dateString}T00:00:00`);
@@ -92,23 +103,6 @@ function formatMonth(date: Date) {
     year: "numeric",
     month: "long",
   });
-}
-
-function formatTime(timeString: string) {
-  return timeString.slice(0, 5);
-}
-
-function getSlotStartDateTime(
-  slot: Pick<RentalSlot, "rental_date" | "start_time">
-) {
-  const time = formatTime(slot.start_time);
-  return new Date(`${slot.rental_date}T${time}:00`);
-}
-
-function hasRentalSlotStarted(
-  slot: Pick<RentalSlot, "rental_date" | "start_time">
-) {
-  return Date.now() >= getSlotStartDateTime(slot).getTime();
 }
 
 function formatShortDate(dateString: string) {
@@ -198,9 +192,17 @@ export default function RentalsPage() {
     []
   );
   const [staffProfiles, setStaffProfiles] = useState<ResponsibleProfile[]>([]);
+  const [surfboards, setSurfboards] = useState<SurfboardWithImages[]>([]);
+  const [surfboardImageUrls, setSurfboardImageUrls] = useState<
+    Record<string, string>
+  >({});
+  const [isLoadingSurfboards, setIsLoadingSurfboards] = useState(false);
+  const [surfboardLoadError, setSurfboardLoadError] = useState("");
+  const [pickerSlotId, setPickerSlotId] = useState<string | null>(null);
   const [monthCursor, setMonthCursor] = useState(() =>
-    parseLocalDate(getTodayDate())
+    parseLocalDate(getTaipeiTodayDate())
   );
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [isLoadingRentals, setIsLoadingRentals] = useState(false);
   const [isCreatingRentalSlot, setIsCreatingRentalSlot] = useState(false);
@@ -216,7 +218,7 @@ export default function RentalsPage() {
   const [updatingPaymentRegistrationId, setUpdatingPaymentRegistrationId] =
     useState<string | null>(null);
 
-  const [newSlotDate, setNewSlotDate] = useState(getTodayDate());
+  const [newSlotDate, setNewSlotDate] = useState(getTaipeiTodayDate());
   const [newSlotStartTime, setNewSlotStartTime] = useState("15:00");
   const [newSlotEndTime, setNewSlotEndTime] = useState("17:00");
   const [newSlotCapacity, setNewSlotCapacity] = useState("5");
@@ -233,13 +235,29 @@ export default function RentalsPage() {
     );
   }, [user]);
 
+  // 頁面開著時定期更新現在時間，跨過開始時間會自動切成已過期。
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, EXPIRATION_TICK_MS);
+
+    return () => clearInterval(timer);
+  }, []);
+
   const canView = canViewRentals(profile);
   const canManageSlots = canManageRentalSlots(profile);
   const canViewUnpaid = canViewUnpaidRentals(profile);
   const canMarkPaid = canMarkRentalPaid(profile);
   const canSeeSurfboards = canViewSurfboards(profile);
+  const canPickSurfboards = canBrowseSurfboards(profile);
 
-  const today = useMemo(() => getTodayDate(), []);
+  const today = getTaipeiTodayDate(currentTime);
+
+  const isSlotExpired = useCallback(
+    (slot: Pick<RentalSlot, "rental_date" | "start_time">) =>
+      isRentalSlotExpired(slot, currentTime),
+    [currentTime]
+  );
 
   const calendarCells = useMemo(
     () => getCalendarCells(monthCursor),
@@ -278,6 +296,27 @@ export default function RentalsPage() {
     [rentalRegistrations]
   );
 
+  const getSurfboardById = useCallback(
+    (surfboardId: string | null) => {
+      if (!surfboardId) return null;
+      return surfboards.find((board) => board.id === surfboardId) ?? null;
+    },
+    [surfboards]
+  );
+
+  /** 同一時段中已被選走的板子，用來停用挑板卡片。 */
+  const getTakenSurfboardIds = useCallback(
+    (slotId: string) =>
+      rentalRegistrations
+        .filter(
+          (registration) =>
+            registration.rental_slot_id === slotId &&
+            registration.surfboard_id !== null
+        )
+        .map((registration) => registration.surfboard_id as string),
+    [rentalRegistrations]
+  );
+
   const getMyRegistration = useCallback(
     (slotId: string) => {
       if (!user) return null;
@@ -304,9 +343,9 @@ export default function RentalsPage() {
       const slot = rentalSlots.find(
         (item) => item.id === registration.rental_slot_id
       );
-      return slot ? hasRentalSlotStarted(slot) : false;
+      return slot ? isSlotExpired(slot) : false;
     }).length;
-  }, [rentalRegistrations, rentalSlots, user]);
+  }, [isSlotExpired, rentalRegistrations, rentalSlots, user]);
 
   const unpaidRegistrations = useMemo(() => {
     return rentalRegistrations
@@ -315,7 +354,7 @@ export default function RentalsPage() {
         const slot = rentalSlots.find(
           (item) => item.id === registration.rental_slot_id
         );
-        return slot ? hasRentalSlotStarted(slot) : false;
+        return slot ? isSlotExpired(slot) : false;
       })
       .sort((a, b) => {
         const slotA = rentalSlots.find((item) => item.id === a.rental_slot_id);
@@ -326,7 +365,7 @@ export default function RentalsPage() {
         if (dateCompare !== 0) return dateCompare;
         return slotA.start_time.localeCompare(slotB.start_time);
       });
-  }, [rentalRegistrations, rentalSlots]);
+  }, [isSlotExpired, rentalRegistrations, rentalSlots]);
 
   const loadRentalData = useCallback(async () => {
     setIsLoadingRentals(true);
@@ -344,7 +383,7 @@ export default function RentalsPage() {
       supabase
         .from("rental_registrations")
         .select(
-          "id, rental_slot_id, user_id, is_paid, paid_at, paid_by, created_at, updated_at"
+          "id, rental_slot_id, user_id, surfboard_id, is_paid, paid_at, paid_by, created_at, updated_at"
         )
         .order("created_at", { ascending: true }),
       supabase
@@ -394,10 +433,46 @@ export default function RentalsPage() {
     }
   }, [canManageSlots, setStatusMessage]);
 
+  const loadSurfboardData = useCallback(async () => {
+    setIsLoadingSurfboards(true);
+    setSurfboardLoadError("");
+
+    const boardsResult = await fetchSurfboards();
+
+    if (boardsResult.error !== null) {
+      setIsLoadingSurfboards(false);
+      setSurfboards([]);
+      setSurfboardImageUrls({});
+      setSurfboardLoadError(`讀取衝浪板失敗：${boardsResult.error}`);
+      return;
+    }
+
+    const storagePaths = boardsResult.data.flatMap((board) =>
+      board.images.map((image) => image.storage_path)
+    );
+    const urlsResult = await createSignedSurfboardImageUrls(storagePaths);
+
+    setIsLoadingSurfboards(false);
+    setSurfboards(boardsResult.data);
+
+    if (urlsResult.error !== null) {
+      setSurfboardImageUrls({});
+      setSurfboardLoadError(`讀取衝浪板圖片失敗：${urlsResult.error}`);
+      return;
+    }
+
+    setSurfboardImageUrls(urlsResult.urls);
+  }, []);
+
   useEffect(() => {
     if (!canView) return;
     queueMicrotask(() => void loadRentalData());
   }, [canView, loadRentalData]);
+
+  useEffect(() => {
+    if (!canPickSurfboards) return;
+    queueMicrotask(() => void loadSurfboardData());
+  }, [canPickSurfboards, loadSurfboardData]);
 
   const isSlotFull = (slot: RentalSlot) => {
     return getSlotRegistrations(slot.id).length >= slot.capacity;
@@ -446,6 +521,17 @@ export default function RentalsPage() {
       return;
     }
 
+    // 以台灣時間驗證完整的日期＋開始時間，今天已經過去的時間也不能新增。
+    if (
+      !isRentalSlotStartInFuture({
+        rental_date: newSlotDate,
+        start_time: newSlotStartTime,
+      })
+    ) {
+      setStatusMessage("租板開始時間必須晚於目前時間。");
+      return;
+    }
+
     setIsCreatingRentalSlot(true);
     setStatusMessage("");
 
@@ -469,7 +555,7 @@ export default function RentalsPage() {
       return;
     }
 
-    setNewSlotDate(getTodayDate());
+    setNewSlotDate(getTaipeiTodayDate());
     setNewSlotStartTime("15:00");
     setNewSlotEndTime("17:00");
     setNewSlotCapacity("5");
@@ -484,6 +570,11 @@ export default function RentalsPage() {
   const handleToggleRentalSlot = async (slot: RentalSlot) => {
     if (!canManageSlots) {
       setStatusMessage("只有板務、幹部與管理員可以開關租板時段。");
+      return;
+    }
+
+    if (isSlotExpired(slot)) {
+      setStatusMessage("此租板時段已過期，無法重新開放或關閉。");
       return;
     }
 
@@ -540,6 +631,7 @@ export default function RentalsPage() {
     await loadRentalData();
   };
 
+  /** 登記前先開啟挑板視窗，實際登記在 handleConfirmRegistration。 */
   const handleRegisterRental = async (slot: RentalSlot) => {
     if (!user) {
       setStatusMessage("請先登入後再登記租板。");
@@ -548,6 +640,11 @@ export default function RentalsPage() {
 
     if (!canView) {
       setStatusMessage("目前身份尚未開通租板權限。");
+      return;
+    }
+
+    if (isSlotExpired(slot)) {
+      setStatusMessage("此租板時段已過期，無法登記");
       return;
     }
 
@@ -573,21 +670,44 @@ export default function RentalsPage() {
       return;
     }
 
+    setStatusMessage("");
+    setPickerSlotId(slot.id);
+  };
+
+  const handleConfirmRegistration = async (surfboardId: string) => {
+    if (!pickerSlotId) return;
+
+    const slot = rentalSlots.find((item) => item.id === pickerSlotId);
+    if (!slot) {
+      setPickerSlotId(null);
+      setStatusMessage("找不到租板時段，請重新整理後再試。");
+      return;
+    }
+
+    if (isSlotExpired(slot)) {
+      setPickerSlotId(null);
+      setStatusMessage("此租板時段已過期，無法登記");
+      return;
+    }
+
     setSavingRegistrationSlotId(slot.id);
     setStatusMessage("");
 
     const supabase = createClient();
     const { error } = await supabase.rpc("register_rental_slot", {
       target_slot_id: slot.id,
+      target_surfboard_id: surfboardId,
     });
 
     setSavingRegistrationSlotId(null);
 
     if (error) {
       setStatusMessage(`登記租板失敗：${error.message}`);
+      await loadRentalData();
       return;
     }
 
+    setPickerSlotId(null);
     setSelectedSlotId(slot.id);
     setStatusMessage(
       myUnpaidCount === 1
@@ -613,7 +733,7 @@ export default function RentalsPage() {
     const slot = rentalSlots.find(
       (item) => item.id === registration.rental_slot_id
     );
-    if (slot && hasRentalSlotStarted(slot)) {
+    if (slot && isSlotExpired(slot)) {
       setStatusMessage("租板時段已開始，無法取消");
       return;
     }
@@ -786,10 +906,11 @@ export default function RentalsPage() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="日期">
+                  <FormField label="日期" hint="不能選擇今天以前的日期">
                     <input
                       type="date"
                       value={newSlotDate}
+                      min={today}
                       onChange={(event) => setNewSlotDate(event.target.value)}
                       className={fieldControlClasses}
                     />
@@ -1004,8 +1125,9 @@ export default function RentalsPage() {
                                 slot.min_surf_level
                               );
                               const full = isSlotFull(slot);
+                              const expired = isSlotExpired(slot);
                               const isAvailableForUser =
-                                slot.is_open && meetsLevel && !full;
+                                !expired && slot.is_open && meetsLevel && !full;
                               const tone = getSurfLevelTone(slot.min_surf_level);
                               const isSelected = selectedSlotId === slot.id;
 
@@ -1033,10 +1155,16 @@ export default function RentalsPage() {
                                   <span className="mt-0.5 block text-slate-500">
                                     {registrations.length}/{slot.capacity}
                                   </span>
-                                  {!slot.is_open && (
+                                  {expired ? (
                                     <span className="mt-0.5 block text-slate-400">
-                                      未開放
+                                      已過期
                                     </span>
+                                  ) : (
+                                    !slot.is_open && (
+                                      <span className="mt-0.5 block text-slate-400">
+                                        未開放
+                                      </span>
+                                    )
                                   )}
                                 </button>
                               );
@@ -1053,7 +1181,6 @@ export default function RentalsPage() {
                 {selectedSlot ? (
                   <RentalSlotDetail
                     slot={selectedSlot}
-                    userId={user.id}
                     profile={profile}
                     registrations={getSlotRegistrations(selectedSlot.id)}
                     boardManager={getResponsibleProfileById(
@@ -1062,9 +1189,12 @@ export default function RentalsPage() {
                     getPublicProfileById={getPublicProfileById}
                     myRegistration={getMyRegistration(selectedSlot.id)}
                     isFull={isSlotFull(selectedSlot)}
+                    isExpired={isSlotExpired(selectedSlot)}
                     myUnpaidCount={myUnpaidCount}
                     canManageSlots={canManageSlots}
                     canMarkPaid={canMarkPaid}
+                    getSurfboardById={getSurfboardById}
+                    surfboardImageUrls={surfboardImageUrls}
                     updatingRentalSlotId={updatingRentalSlotId}
                     deletingRentalSlotId={deletingRentalSlotId}
                     savingRegistrationSlotId={savingRegistrationSlotId}
@@ -1113,6 +1243,20 @@ export default function RentalsPage() {
         )}
       </div>
 
+      {pickerSlotId && (
+        <SurfboardPicker
+          boards={surfboards}
+          imageUrls={surfboardImageUrls}
+          profile={profile}
+          takenSurfboardIds={getTakenSurfboardIds(pickerSlotId)}
+          isLoading={isLoadingSurfboards}
+          isSubmitting={savingRegistrationSlotId === pickerSlotId}
+          loadErrorMessage={surfboardLoadError}
+          onClose={() => setPickerSlotId(null)}
+          onConfirm={handleConfirmRegistration}
+        />
+      )}
+
       <MobileTabBar />
     </main>
   );
@@ -1120,16 +1264,18 @@ export default function RentalsPage() {
 
 function RentalSlotDetail({
   slot,
-  userId,
   profile,
   registrations,
   boardManager,
   getPublicProfileById,
   myRegistration,
   isFull,
+  isExpired,
   myUnpaidCount,
   canManageSlots,
   canMarkPaid,
+  getSurfboardById,
+  surfboardImageUrls,
   updatingRentalSlotId,
   deletingRentalSlotId,
   savingRegistrationSlotId,
@@ -1141,16 +1287,18 @@ function RentalSlotDetail({
   onTogglePayment,
 }: {
   slot: RentalSlot;
-  userId: string;
   profile: { surf_level: string | null } | null;
   registrations: RentalRegistration[];
   boardManager: ResponsibleProfile | PublicMemberProfile | null;
   getPublicProfileById: (profileId: string | null) => PublicMemberProfile | null;
   myRegistration: RentalRegistration | null;
   isFull: boolean;
+  isExpired: boolean;
   myUnpaidCount: number;
   canManageSlots: boolean;
   canMarkPaid: boolean;
+  getSurfboardById: (surfboardId: string | null) => SurfboardWithImages | null;
+  surfboardImageUrls: Record<string, string>;
   updatingRentalSlotId: string | null;
   deletingRentalSlotId: string | null;
   savingRegistrationSlotId: string | null;
@@ -1165,9 +1313,9 @@ function RentalSlotDetail({
   ) => Promise<void>;
 }) {
   const meetsLevel = userMeetsSurfLevel(profile, slot.min_surf_level);
-  const slotStarted = hasRentalSlotStarted(slot);
   const blockedByUnpaid = myUnpaidCount >= 2;
   const canRegister =
+    !isExpired &&
     slot.is_open &&
     !isFull &&
     !myRegistration &&
@@ -1178,9 +1326,16 @@ function RentalSlotDetail({
     (_, index) => registrations[index] ?? null
   );
 
-  const canCancelRegistration = (registration: RentalRegistration) =>
-    !slotStarted &&
-    (registration.user_id === userId || canManageSlots);
+  const getRegistrationSurfboard = (registration: RentalRegistration) => {
+    const board = getSurfboardById(registration.surfboard_id);
+    if (!board) return null;
+
+    const cover = board.images[0];
+    return {
+      board,
+      imageUrl: cover ? (surfboardImageUrls[cover.storage_path] ?? null) : null,
+    };
+  };
 
   return (
     <Card>
@@ -1195,14 +1350,19 @@ function RentalSlotDetail({
             <Button
               variant="outline"
               icon={<Power size={16} />}
+              title={
+                isExpired ? "此租板時段已過期，無法開關" : undefined
+              }
               onClick={() => void onToggleSlot(slot)}
-              disabled={updatingRentalSlotId === slot.id}
+              disabled={isExpired || updatingRentalSlotId === slot.id}
             >
-              {updatingRentalSlotId === slot.id
-                ? "更新中..."
-                : slot.is_open
-                  ? "關閉"
-                  : "開放"}
+              {isExpired
+                ? "已過期"
+                : updatingRentalSlotId === slot.id
+                  ? "更新中..."
+                  : slot.is_open
+                    ? "關閉"
+                    : "開放"}
             </Button>
 
             <Button
@@ -1233,9 +1393,14 @@ function RentalSlotDetail({
           <div>
             <dt className="text-xs text-slate-500">開放狀態</dt>
             <dd className="mt-0.5">
-              <Badge tone={slot.is_open ? "success" : "neutral"}>
-                {slot.is_open ? "開放中" : "已關閉"}
-              </Badge>
+              {/* 已過期優先於 is_open，過期時不會顯示「開放中」。 */}
+              {isExpired ? (
+                <Badge tone="neutral">已過期</Badge>
+              ) : (
+                <Badge tone={slot.is_open ? "success" : "neutral"}>
+                  {slot.is_open ? "開放中" : "已關閉"}
+                </Badge>
+              )}
             </dd>
           </div>
         </div>
@@ -1292,21 +1457,24 @@ function RentalSlotDetail({
         </h3>
 
         <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
-          <table className="w-full min-w-[560px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[560px] border-collapse text-center text-sm">
             <thead>
               <tr className="border-b border-border bg-bg text-xs text-slate-500">
-                <th className="px-3 py-2 font-medium">編號</th>
-                <th className="px-3 py-2 font-medium">姓名</th>
-                <th className="px-3 py-2 font-medium">學號</th>
-                <th className="px-3 py-2 font-medium">衝浪程度</th>
-                <th className="px-3 py-2 font-medium">繳費</th>
-                <th className="px-3 py-2 font-medium">操作</th>
+                <th className="px-3 py-2 text-center font-medium">編號</th>
+                <th className="px-3 py-2 text-center font-medium">姓名</th>
+                <th className="px-3 py-2 text-center font-medium">學號</th>
+                <th className="px-3 py-2 text-center font-medium">衝浪程度</th>
+                <th className="px-3 py-2 text-center font-medium">繳費</th>
+                <th className="px-3 py-2 text-center font-medium">衝浪板</th>
               </tr>
             </thead>
             <tbody>
               {registrationRows.map((registration, index) => {
                 const renter = registration
                   ? getPublicProfileById(registration.user_id)
+                  : null;
+                const surfboard = registration
+                  ? getRegistrationSurfboard(registration)
                   : null;
 
                 return (
@@ -1330,34 +1498,30 @@ function RentalSlotDetail({
                     </td>
                     <td className="px-3 py-3">
                       {registration ? (
-                        <PaymentControl
-                          registration={registration}
-                          canMarkPaid={canMarkPaid}
-                          updatingPaymentRegistrationId={
-                            updatingPaymentRegistrationId
-                          }
-                          onTogglePayment={onTogglePayment}
-                        />
+                        <span className="inline-flex justify-center">
+                          <PaymentControl
+                            registration={registration}
+                            canMarkPaid={canMarkPaid}
+                            updatingPaymentRegistrationId={
+                              updatingPaymentRegistrationId
+                            }
+                            onTogglePayment={onTogglePayment}
+                          />
+                        </span>
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
                     <td className="px-3 py-3">
-                      {registration && canCancelRegistration(registration) ? (
-                        <button
-                          type="button"
-                          onClick={() => void onCancelRegistration(registration)}
-                          disabled={savingRegistrationSlotId === slot.id}
-                          className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
-                        >
-                          <X size={14} />
-                          取消登記
-                        </button>
-                      ) : registration &&
-                        registration.user_id === userId &&
-                        slotStarted ? (
-                        <span className="text-xs text-slate-500">
-                          租板時段已開始，無法取消
+                      {surfboard ? (
+                        <span className="flex flex-col items-center gap-1">
+                          <SurfboardThumbnail
+                            boardName={surfboard.board.name}
+                            imageUrl={surfboard.imageUrl}
+                          />
+                          <span className="max-w-24 truncate text-xs text-slate-600">
+                            {surfboard.board.name}
+                          </span>
                         </span>
                       ) : (
                         <span className="text-slate-400">-</span>
@@ -1375,6 +1539,9 @@ function RentalSlotDetail({
             const renter = registration
               ? getPublicProfileById(registration.user_id)
               : null;
+            const surfboard = registration
+              ? getRegistrationSurfboard(registration)
+              : null;
 
             return (
               <div
@@ -1382,24 +1549,26 @@ function RentalSlotDetail({
                 className="rounded-xl border border-border bg-bg p-3"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-slate-400">編號 {index + 1}</p>
-                    <p className="mt-0.5 font-medium text-slate-800">
+                    <p className="mt-0.5 truncate font-medium text-slate-800">
                       {registration ? renter?.full_name || "未填姓名" : "空位"}
                     </p>
                     {registration && (
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 truncate text-xs text-slate-500">
                         學號：{renter?.student_id || "未填學號"}
                       </p>
                     )}
                   </div>
                   {registration && (
-                    <SurfLevelPill level={renter?.surf_level ?? null} />
+                    <span className="shrink-0">
+                      <SurfLevelPill level={renter?.surf_level ?? null} />
+                    </span>
                   )}
                 </div>
 
                 {registration && (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                     <PaymentControl
                       registration={registration}
                       canMarkPaid={canMarkPaid}
@@ -1409,21 +1578,25 @@ function RentalSlotDetail({
                       onTogglePayment={onTogglePayment}
                     />
 
-                    {canCancelRegistration(registration) ? (
-                      <button
-                        type="button"
-                        onClick={() => void onCancelRegistration(registration)}
-                        disabled={savingRegistrationSlotId === slot.id}
-                        className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
-                      >
-                        <X size={14} />
-                        取消登記
-                      </button>
-                    ) : registration.user_id === userId && slotStarted ? (
-                      <span className="text-xs text-slate-500">
-                        租板時段已開始，無法取消
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 text-xs text-slate-500">
+                        衝浪板
                       </span>
-                    ) : null}
+                      {surfboard ? (
+                        <>
+                          <SurfboardThumbnail
+                            boardName={surfboard.board.name}
+                            imageUrl={surfboard.imageUrl}
+                            className="h-9 w-9"
+                          />
+                          <span className="min-w-0 truncate text-xs text-slate-600">
+                            {surfboard.board.name}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1434,7 +1607,7 @@ function RentalSlotDetail({
 
       <div className="mt-5">
         {myRegistration ? (
-          slotStarted ? (
+          isExpired ? (
             <div className="rounded-xl border border-warning/30 bg-warning-light px-3 py-2 text-sm text-slate-700">
               租板時段已開始，無法取消
             </div>
@@ -1465,6 +1638,13 @@ function RentalSlotDetail({
         )}
 
         <div className="mt-3 flex flex-col gap-1.5">
+          {isExpired && (
+            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+              <Info size={13} />
+              此租板時段已過期，無法登記
+            </p>
+          )}
+
           {!myRegistration && myUnpaidCount === 1 && (
             <p className="flex items-center gap-1.5 text-xs text-warning">
               <Info size={13} />
@@ -1479,14 +1659,14 @@ function RentalSlotDetail({
             </p>
           )}
 
-          {!slot.is_open && (
+          {!isExpired && !slot.is_open && (
             <p className="flex items-center gap-1.5 text-xs text-slate-500">
               <Info size={13} />
               此時段目前未開放登記。
             </p>
           )}
 
-          {slot.is_open && isFull && (
+          {!isExpired && slot.is_open && isFull && (
             <p className="flex items-center gap-1.5 text-xs text-slate-500">
               <Info size={13} />
               此時段已額滿。
