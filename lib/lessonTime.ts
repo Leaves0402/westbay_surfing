@@ -1,9 +1,11 @@
+import { parseTaipeiDateTime } from "@/lib/taipeiTime";
+
 export function formatTime(timeString: string) {
   return timeString.slice(0, 5);
 }
 
 export function getLessonStartDateTime(lessonDate: string, startTime: string) {
-  return new Date(`${lessonDate}T${formatTime(startTime)}:00`);
+  return parseTaipeiDateTime(lessonDate, startTime);
 }
 
 export function hasLessonStarted(lessonDate: string, startTime: string) {
@@ -24,7 +26,8 @@ export function addHoursToTime(timeString: string, hours: number) {
 }
 
 export function formatLessonDate(dateString: string) {
-  return new Date(`${dateString}T00:00:00`).toLocaleDateString("zh-TW", {
+  return new Date(`${dateString}T00:00:00+08:00`).toLocaleDateString("zh-TW", {
+    timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

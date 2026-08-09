@@ -61,6 +61,9 @@ export default function MembersAdminPage() {
   const [officialMembers, setOfficialMembers] = useState<PublicMemberProfile[]>(
     []
   );
+  const [surfTripCounts, setSurfTripCounts] = useState<Record<string, number>>(
+    {}
+  );
   const [pendingMembers, setPendingMembers] = useState<Profile[]>([]);
   const [surfLevelRequests, setSurfLevelRequests] = useState<Profile[]>([]);
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(
@@ -143,9 +146,12 @@ export default function MembersAdminPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const officialResult = await supabase
-      .from("public_member_profiles")
-      .select("id, full_name, student_id, surf_level, role");
+    const [officialResult, tripCountsResult] = await Promise.all([
+      supabase
+        .from("public_member_profiles")
+        .select("id, full_name, student_id, surf_level, role"),
+      supabase.rpc("get_member_surf_trip_counts"),
+    ]);
 
     if (officialResult.error) {
       setIsLoadingMembers(false);
@@ -153,7 +159,23 @@ export default function MembersAdminPage() {
       return;
     }
 
+    if (tripCountsResult.error) {
+      setIsLoadingMembers(false);
+      setStatusMessage(`讀取外衝統計失敗：${tripCountsResult.error.message}`);
+      return;
+    }
+
     setOfficialMembers((officialResult.data ?? []) as PublicMemberProfile[]);
+    setSurfTripCounts(
+      Object.fromEntries(
+        (
+          (tripCountsResult.data ?? []) as Array<{
+            user_id: string;
+            trip_count: number | string;
+          }>
+        ).map((item) => [item.user_id, Number(item.trip_count)])
+      )
+    );
 
     if (canReviewPending || canReviewSurfLevels) {
       const [pendingResult, requestResult] = await Promise.all([
@@ -219,13 +241,10 @@ export default function MembersAdminPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        role: newRole,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", targetProfile.id);
+    const { error } = await supabase.rpc("update_member_role", {
+      target_user_id: targetProfile.id,
+      target_role: newRole,
+    });
 
     setSavingRoleUserId(null);
 
@@ -580,14 +599,17 @@ export default function MembersAdminPage() {
                         {isBatchRemoveMode && (
                           <th className="w-10 px-2 py-1.5 md:w-12 md:px-3 md:py-2" />
                         )}
-                        <th className="w-[24%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                        <th className="w-[22%] px-2 py-1.5 font-medium md:px-3 md:py-2">
                           姓名
                         </th>
-                        <th className="w-[26%] px-2 py-1.5 font-medium md:px-3 md:py-2">
+                        <th className="w-[22%] px-2 py-1.5 font-medium md:px-3 md:py-2">
                           學號
                         </th>
-                        <th className="w-[20%] whitespace-nowrap px-2 py-1.5 font-medium md:px-3 md:py-2">
+                        <th className="w-[17%] whitespace-nowrap px-2 py-1.5 font-medium md:px-3 md:py-2">
                           程度
+                        </th>
+                        <th className="w-[15%] whitespace-nowrap px-2 py-1.5 font-medium md:px-3 md:py-2">
+                          外衝次數
                         </th>
                         <th className="w-[24%] px-2 py-1.5 font-medium md:px-3 md:py-2">
                           身分
@@ -631,8 +653,13 @@ export default function MembersAdminPage() {
                                 <SurfLevelBadge level={member.surf_level} />
                               </span>
                             </td>
+                            <td className="whitespace-nowrap px-2 py-2 font-medium text-text-primary md:px-3">
+                              {surfTripCounts[member.id] ?? 0}
+                            </td>
                             <td className="px-2 py-2 md:px-3">
-                              {canManage ? (
+                              {canManage &&
+                              (profile?.role === "admin" ||
+                                member.role !== "admin") ? (
                                 <select
                                   value={member.role}
                                   disabled={
@@ -648,11 +675,17 @@ export default function MembersAdminPage() {
                                   }
                                   className={`${fieldControlClasses} h-8 w-20 px-1.5 py-0.5 text-xs md:h-9 md:w-28 md:px-2 md:py-1 md:text-sm`}
                                 >
-                                  {officialMemberRoleOptions.map((role) => (
+                                  {officialMemberRoleOptions
+                                    .filter(
+                                      (role) =>
+                                        profile?.role === "admin" ||
+                                        role !== "admin"
+                                    )
+                                    .map((role) => (
                                     <option key={role} value={role}>
                                       {roleLabels[role]}
                                     </option>
-                                  ))}
+                                    ))}
                                 </select>
                               ) : (
                                 <Badge

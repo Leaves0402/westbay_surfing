@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useDialogAccessibility } from "@/lib/useDialogAccessibility";
 
 /**
  * 未登入使用者點擊受保護操作時顯示的登入提示。
@@ -20,47 +21,11 @@ export function LoginPromptDialog({
   onClose: () => void;
 }) {
   const loginButtonRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    loginButtonRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isSubmitting) {
-        onClose();
-        return;
-      }
-
-      if (event.key !== "Tab") return;
-
-      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
-      );
-      if (!focusable || focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isSubmitting, onClose]);
+  const panelRef = useDialogAccessibility({
+    onClose,
+    isBusy: isSubmitting,
+    initialFocusRef: loginButtonRef,
+  });
 
   return (
     <div
@@ -73,6 +38,7 @@ export function LoginPromptDialog({
     >
       <div
         ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-prompt-title"

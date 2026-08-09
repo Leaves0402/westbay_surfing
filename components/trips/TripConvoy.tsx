@@ -231,7 +231,7 @@ export function TripConvoy({
               <span className="origin-top scale-90">
                 <SurfLevelBadge level={passengerProfile?.surf_level} />
               </span>
-              {isMine && (
+              {isMine && canInteract && (
                 <button
                   type="button"
                   className="mt-0.5 text-[10px] text-danger hover:underline disabled:opacity-40"

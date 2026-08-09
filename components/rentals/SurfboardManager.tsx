@@ -16,7 +16,7 @@ type DialogState =
   | { mode: "detail"; boardId: string }
   | null;
 
-export function SurfboardManager({ userId }: { userId: string }) {
+export function SurfboardManager() {
   const [boards, setBoards] = useState<SurfboardWithImages[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -241,7 +241,6 @@ export function SurfboardManager({ userId }: { userId: string }) {
         <SurfboardDialog
           board={null}
           imageUrls={imageUrls}
-          userId={userId}
           onClose={() => setDialogState(null)}
           onCreated={async (message) => {
             setDialogState(null);
@@ -260,7 +259,6 @@ export function SurfboardManager({ userId }: { userId: string }) {
         <SurfboardDialog
           board={selectedBoard}
           imageUrls={imageUrls}
-          userId={userId}
           onClose={() => setDialogState(null)}
           onCreated={async (message) => {
             setDialogState(null);

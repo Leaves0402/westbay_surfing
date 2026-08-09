@@ -61,6 +61,8 @@
 - 車長功能
 - 外衝聊天室
 - 外衝備取機制
+- 外衝開始時鎖定車隊名單並累計社員參加次數
+- 已結束外衝保留三天後自動清理
 
 ### 5. 社課系統
 
@@ -99,10 +101,12 @@ http://localhost:3000
 ## Build 測試
 
 ```bash
+npm run lint
+npm run typecheck
 npm run build
 ```
 
-推送前請先確認 build 通過。
+推送前請先確認 lint、型別檢查與 build 都通過。
 
 ---
 
@@ -132,6 +136,14 @@ docs/sql/
 ```
 
 執行 SQL 時請到 Supabase SQL Editor。
+
+既有資料庫更新到本版本時，請在原有 SQL 都已執行後，再執行：
+
+```text
+docs/sql/apply_priority_fixes_and_surf_trip_stats.sql
+```
+
+這個檔案會新增外衝計次資料、三日保留規則，以及課程／衝浪板／權限相關 RPC。它會在環境允許時自動建立每小時 lifecycle 排程；若無法啟用 `pg_cron`，開啟外衝頁或社員名單頁仍會自動處理。
 
 修改資料庫前請先確認：
 

@@ -55,6 +55,9 @@ set suitability_level = '中進階'
 where suitability_level in ('中高階', '高階');
 
 alter table public.surfboards
+drop constraint if exists surfboards_suitability_level_check;
+
+alter table public.surfboards
 add constraint surfboards_suitability_level_check
 check (suitability_level in ('初階', '中階', '中進階', '進階'));
 
@@ -64,6 +67,9 @@ check (suitability_level in ('初階', '中階', '中進階', '進階'));
 
 alter table public.surfboards
 alter column buoyancy drop not null;
+
+alter table public.surfboards
+drop constraint if exists surfboards_buoyancy_check;
 
 alter table public.surfboards
 add constraint surfboards_buoyancy_check
@@ -101,6 +107,9 @@ $$;
 
 alter table public.surfboards
 alter column length drop not null;
+
+alter table public.surfboards
+drop constraint if exists surfboards_length_check;
 
 alter table public.surfboards
 add constraint surfboards_length_check

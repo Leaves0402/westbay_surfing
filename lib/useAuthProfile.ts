@@ -78,21 +78,6 @@ export function useAuthProfile() {
     const initUser = async () => {
       try {
         const supabase = createClient();
-        const { data, error } = await supabase.auth.getUser();
-
-        if (!isMounted) return;
-
-        if (error) {
-          setStatusMessage(`讀取登入狀態失敗：${error.message}`);
-          setIsLoading(false);
-          return;
-        }
-
-        setUser(data.user);
-
-        if (data.user) {
-          await loadOrCreateProfile(data.user);
-        }
 
         const authListener = supabase.auth.onAuthStateChange((_event, session) => {
           if (!isMounted) return;
@@ -107,8 +92,32 @@ export function useAuthProfile() {
             setStatusMessage("");
           }
         });
-
         subscription = authListener.data.subscription;
+
+        const { data, error } = await supabase.auth.getUser();
+
+        if (!isMounted) return;
+
+        if (error) {
+          if (
+            error.name === "AuthSessionMissingError" ||
+            error.message.toLowerCase().includes("auth session missing")
+          ) {
+            setUser(null);
+            setProfile(null);
+            setStatusMessage("");
+          } else {
+            setStatusMessage(`讀取登入狀態失敗：${error.message}`);
+          }
+          return;
+        }
+
+        setUser(data.user);
+
+        if (data.user) {
+          await loadOrCreateProfile(data.user);
+        }
+
       } catch (error) {
         if (isMounted) {
           setStatusMessage(`初始化登入狀態失敗：${getErrorMessage(error)}`);
@@ -154,7 +163,13 @@ export function useAuthProfile() {
 
   const handleLogout = useCallback(async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setStatusMessage(`登出失敗：${error.message}`);
+      return;
+    }
+
     setUser(null);
     setProfile(null);
     setStatusMessage("");

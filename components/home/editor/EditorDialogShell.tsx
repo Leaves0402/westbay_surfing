@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
+import { useDialogAccessibility } from "@/lib/useDialogAccessibility";
 
 /**
  * 首頁編輯用的共用 Dialog 外框：統一標題、關閉、Esc、背景鎖定與底部按鈕列。
@@ -25,44 +25,7 @@ export function EditorDialogShell({
   children: ReactNode;
   maxWidthClassName?: string;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isBusy) {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (event.key !== "Tab") return;
-
-      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      if (!focusable || focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isBusy, onClose]);
+  const panelRef = useDialogAccessibility({ onClose, isBusy });
 
   return (
     <div
@@ -75,6 +38,7 @@ export function EditorDialogShell({
     >
       <div
         ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}

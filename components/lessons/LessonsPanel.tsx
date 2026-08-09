@@ -9,10 +9,12 @@ import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import {
   addHoursToTime,
   formatLessonLabel,
+  hasLessonStarted,
   isLessonCancelLocked,
 } from "@/lib/lessonTime";
 import { canManageLessons } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
+import { getTaipeiDate } from "@/lib/taipeiTime";
 import {
   roleLabels,
   type Lesson,
@@ -33,12 +35,6 @@ type LessonsPanelProps = {
   onStatusMessage: (message: string) => void;
 };
 
-function getTodayDate() {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 10);
-}
-
 export function LessonsPanel({
   userId,
   profile,
@@ -51,7 +47,7 @@ export function LessonsPanel({
   const [isCreating, setIsCreating] = useState(false);
   const [actingLessonId, setActingLessonId] = useState<string | null>(null);
 
-  const [lessonDate, setLessonDate] = useState(getTodayDate());
+  const [lessonDate, setLessonDate] = useState(getTaipeiDate());
   const [startTime, setStartTime] = useState("15:00");
   const [endTime, setEndTime] = useState("17:00");
   const [endTimeTouched, setEndTimeTouched] = useState(false);
@@ -119,20 +115,6 @@ export function LessonsPanel({
     );
 
     const lessonRows = (lessonsResult.data ?? []) as Lesson[];
-    for (const lesson of lessonRows) {
-      await supabase.rpc("promote_lesson_waitlist", {
-        target_lesson_id: lesson.id,
-      });
-    }
-
-    const refreshedParticipants = await supabase
-      .from("lesson_participants")
-      .select(
-        "id, lesson_id, user_id, status, waitlist_order, created_at, updated_at"
-      );
-
-    const finalParticipants = (refreshedParticipants.data ??
-      participantRows) as LessonParticipant[];
 
     setLessons(
       lessonRows.map((lesson) => ({
@@ -141,7 +123,7 @@ export function LessonsPanel({
           .filter((row) => row.lesson_id === lesson.id)
           .map((row) => membersById.get(row.instructor_id))
           .filter((member): member is PublicMemberProfile => Boolean(member)),
-        participants: finalParticipants.filter(
+        participants: participantRows.filter(
           (row) => row.lesson_id === lesson.id
         ),
       }))
@@ -153,7 +135,7 @@ export function LessonsPanel({
   }, [loadLessons]);
 
   const resetForm = () => {
-    setLessonDate(getTodayDate());
+    setLessonDate(getTaipeiDate());
     setStartTime("15:00");
     setEndTime("17:00");
     setEndTimeTouched(false);
@@ -193,43 +175,20 @@ export function LessonsPanel({
     onStatusMessage("");
 
     const supabase = createClient();
-    const { data, error } = await supabase
-      .from("lessons")
-      .insert({
-        lesson_date: lessonDate,
-        start_time: startTime,
-        end_time: endTime,
-        capacity: capacityValue,
-        waitlist_capacity: 10,
-        note: note.trim() || null,
-        created_by: userId,
-      })
-      .select(
-        "id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"
-      )
-      .single();
-
-    if (error || !data) {
-      setIsCreating(false);
-      onStatusMessage(`新增社課失敗：${error?.message ?? "未知錯誤"}`);
-      return;
-    }
-
-    const lessonId = (data as Lesson).id;
-    const { error: instructorError } = await supabase
-      .from("lesson_instructors")
-      .insert(
-        selectedInstructorIds.map((instructorId) => ({
-          lesson_id: lessonId,
-          instructor_id: instructorId,
-        }))
-      );
+    const { error } = await supabase.rpc("create_lesson", {
+      target_lesson_date: lessonDate,
+      target_start_time: startTime,
+      target_end_time: endTime,
+      target_capacity: capacityValue,
+      target_waitlist_capacity: 10,
+      target_note: note.trim(),
+      target_instructor_ids: selectedInstructorIds,
+    });
 
     setIsCreating(false);
 
-    if (instructorError) {
-      await supabase.from("lessons").delete().eq("id", lessonId);
-      onStatusMessage(`新增教學名單失敗：${instructorError.message}`);
+    if (error) {
+      onStatusMessage(`新增社課失敗：${error.message}`);
       return;
     }
 
@@ -436,6 +395,11 @@ export function LessonsPanel({
                 lesson.lesson_date,
                 lesson.start_time
               );
+              const lessonStarted = hasLessonStarted(
+                lesson.lesson_date,
+                lesson.start_time
+              );
+              const registrationLocked = cancelLocked || lessonStarted;
               const instructorNames = lesson.instructors
                 .map(
                   (item) =>
@@ -536,7 +500,7 @@ export function LessonsPanel({
                       </>
                     )}
 
-                    {!mine && !isFull && (
+                    {!mine && !registrationLocked && !isFull && (
                       <Button
                         variant="primary"
                         className="!min-h-9 !px-3 !text-xs"
@@ -547,7 +511,7 @@ export function LessonsPanel({
                       </Button>
                     )}
 
-                    {!mine && isFull && !waitlistFull && (
+                    {!mine && !registrationLocked && isFull && !waitlistFull && (
                       <Button
                         variant="outline"
                         className="!min-h-9 !px-3 !text-xs"
@@ -560,7 +524,7 @@ export function LessonsPanel({
                       </Button>
                     )}
 
-                    {!mine && isFull && waitlistFull && (
+                    {!mine && !registrationLocked && isFull && waitlistFull && (
                       <Button
                         variant="outline"
                         className="!min-h-9 !px-3 !text-xs"
@@ -568,6 +532,12 @@ export function LessonsPanel({
                       >
                         已額滿
                       </Button>
+                    )}
+
+                    {!mine && registrationLocked && (
+                      <span className="text-xs text-text-secondary">
+                        {lessonStarted ? "社課已開始" : "開始前 5 小時停止報名"}
+                      </span>
                     )}
                   </div>
                 </div>

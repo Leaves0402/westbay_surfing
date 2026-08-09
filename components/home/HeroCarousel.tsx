@@ -121,7 +121,9 @@ export function HeroCarousel({
                 src={slide.url}
                 alt={slide.alt}
                 fill
-                priority={index === 0}
+                preload={index === 0}
+                loading={index === 0 ? undefined : index === 1 ? "eager" : "lazy"}
+                fetchPriority={index === 0 ? "high" : "auto"}
                 unoptimized
                 sizes="100vw"
                 className="object-cover"

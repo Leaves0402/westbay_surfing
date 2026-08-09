@@ -950,7 +950,7 @@ export default function RentalsPage() {
               </Card>
             )}
 
-            {canSeeSurfboards && <SurfboardManager userId={user.id} />}
+            {canSeeSurfboards && <SurfboardManager />}
 
             <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
               <Card className="p-0 overflow-hidden">

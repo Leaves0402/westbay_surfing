@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { fieldControlClasses } from "@/components/ui/FormField";
 import { createClient } from "@/lib/supabase/client";
 import type { PublicMemberProfile, SurfTripMessage } from "@/lib/types";
+import { useDialogAccessibility } from "@/lib/useDialogAccessibility";
 
 type TripChatModalProps = {
   tripId: string;
@@ -35,6 +36,7 @@ export function TripChatModal({
   onClose,
   onError,
 }: TripChatModalProps) {
+  const panelRef = useDialogAccessibility({ onClose });
   const [messages, setMessages] = useState<SurfTripMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -109,6 +111,8 @@ export function TripChatModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center">
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="外衝聊天室"

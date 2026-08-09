@@ -125,12 +125,14 @@ function LessonAttendanceStatCard({ userId }: { userId: string }) {
   const [attendedCount, setAttendedCount] = useState(0);
   const [startedLessonCount, setStartedLessonCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let active = true;
 
     const loadStats = async () => {
       setIsLoading(true);
+      setLoadError("");
       const supabase = createClient();
       const [lessonsResult, memberAttendanceResult, instructorAttendanceResult] =
         await Promise.all([
@@ -156,6 +158,16 @@ function LessonAttendanceStatCard({ userId }: { userId: string }) {
         ]);
 
       if (!active) return;
+
+      const firstError =
+        lessonsResult.error ??
+        memberAttendanceResult.error ??
+        instructorAttendanceResult.error;
+      if (firstError) {
+        setLoadError(`讀取出席統計失敗：${firstError.message}`);
+        setIsLoading(false);
+        return;
+      }
 
       const lessons = (lessonsResult.data ?? []) as Lesson[];
       const memberAttendance = (memberAttendanceResult.data ??
@@ -191,7 +203,7 @@ function LessonAttendanceStatCard({ userId }: { userId: string }) {
       <p className="mt-2 text-sm text-text-secondary">
         {isLoading
           ? "讀取中..."
-          : `社課出席：${attendedCount} / ${startedLessonCount}`}
+          : loadError || `社課出席：${attendedCount} / ${startedLessonCount}`}
       </p>
     </Card>
   );

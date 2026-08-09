@@ -34,6 +34,7 @@ import {
   surfboardSuitabilityLevelOptions,
   surfboardUnknownValueText,
 } from "@/lib/types";
+import { useDialogAccessibility } from "@/lib/useDialogAccessibility";
 
 type DialogNoticeTone = "success" | "danger" | "warning";
 
@@ -88,7 +89,6 @@ function revokeNewImagePreviews(items: SurfboardEditorImage[]) {
 export function SurfboardDialog({
   board,
   imageUrls,
-  userId,
   onClose,
   onCreated,
   onSaved,
@@ -97,7 +97,6 @@ export function SurfboardDialog({
   /** null 代表新增模式。 */
   board: SurfboardWithImages | null;
   imageUrls: Record<string, string>;
-  userId: string;
   onClose: () => void;
   onCreated: (message: string) => Promise<void>;
   onSaved: () => Promise<void>;
@@ -139,23 +138,16 @@ export function SurfboardDialog({
     onClose();
   }, [isBusy, onClose]);
 
-  // 鍵盤 Esc 關閉。
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (isBusy) return;
-
+  const panelRef = useDialogAccessibility({
+    isBusy,
+    onClose: () => {
       if (showDeleteConfirm) {
         setShowDeleteConfirm(false);
         return;
       }
-
-      onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isBusy, onClose, showDeleteConfirm]);
+      handleClose();
+    },
+  });
 
   const startEditing = () => {
     if (!board) return;
@@ -280,7 +272,6 @@ export function SurfboardDialog({
               item.kind === "new"
           )
           .map((item) => item.file),
-        userId,
       });
 
       setIsSaving(false);
@@ -389,6 +380,8 @@ export function SurfboardDialog({
       }}
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}

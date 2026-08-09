@@ -30,6 +30,7 @@ import {
   userMeetsSurfLevel,
 } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
+import { getTaipeiDate } from "@/lib/taipeiTime";
 import {
   roleLabels,
   surfLevelOptions,
@@ -49,18 +50,13 @@ type TripWithDetails = SurfTrip & {
   waitlist: SurfTripWaitlistEntry[];
 };
 
-function getTodayDate() {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 10);
-}
-
 function parseLocalDate(dateString: string) {
-  return new Date(`${dateString}T00:00:00`);
+  return new Date(`${dateString}T00:00:00+08:00`);
 }
 
 function formatDate(dateString: string) {
   return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+    timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -111,8 +107,8 @@ export default function TripsPage() {
   const [isSavingLevel, setIsSavingLevel] = useState(false);
   const [chatTripId, setChatTripId] = useState<string | null>(null);
 
-  const [startDate, setStartDate] = useState(getTodayDate());
-  const [endDate, setEndDate] = useState(getTodayDate());
+  const [startDate, setStartDate] = useState(() => getTaipeiDate(1));
+  const [endDate, setEndDate] = useState(() => getTaipeiDate(1));
   const [selectedSpotIds, setSelectedSpotIds] = useState<string[]>([]);
   const [capacity, setCapacity] = useState("5");
   const [minSurfLevel, setMinSurfLevel] = useState("");
@@ -134,9 +130,9 @@ export default function TripsPage() {
   );
 
   const resetForm = useCallback(() => {
-    const today = getTodayDate();
-    setStartDate(today);
-    setEndDate(today);
+    const tomorrow = getTaipeiDate(1);
+    setStartDate(tomorrow);
+    setEndDate(tomorrow);
     setSelectedSpotIds([]);
     setCapacity("5");
     setMinSurfLevel("");
@@ -148,9 +144,16 @@ export default function TripsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const today = getTodayDate();
+    const retentionStartDate = getTaipeiDate(-3);
 
-    await supabase.rpc("cleanup_past_surf_trips");
+    const { error: lifecycleError } = await supabase.rpc(
+      "process_surf_trip_lifecycle"
+    );
+    if (lifecycleError) {
+      setIsLoadingTrips(false);
+      setStatusMessage(`更新外衝狀態失敗：${lifecycleError.message}`);
+      return;
+    }
 
     const [
       spotsResult,
@@ -169,9 +172,9 @@ export default function TripsPage() {
       supabase
         .from("surf_trips")
         .select(
-          "id, start_date, end_date, capacity, leader_id, min_surf_level, note, created_by, created_at, updated_at"
+          "id, start_date, end_date, capacity, leader_id, min_surf_level, note, created_by, created_at, updated_at, participation_counted_at"
         )
-        .gte("end_date", today)
+        .gte("end_date", retentionStartDate)
         .order("start_date", { ascending: true })
         .order("created_at", { ascending: false }),
       supabase.from("surf_trip_spots").select("trip_id, spot_id"),
@@ -233,37 +236,11 @@ export default function TripsPage() {
     const loadedTrips = (tripsResult.data ?? []) as SurfTrip[];
     const loadedTripSpots = (tripSpotsResult.data ?? []) as SurfTripSpot[];
     const loadedCars = (carsResult.data ?? []) as SurfTripCar[];
-    let loadedPassengers = (passengersResult.data ??
+    const loadedPassengers = (passengersResult.data ??
       []) as SurfTripCarPassenger[];
-    let loadedWaitlist = (waitlistResult.data ??
+    const loadedWaitlist = (waitlistResult.data ??
       []) as SurfTripWaitlistEntry[];
     const spotsById = new Map(loadedSpots.map((spot) => [spot.id, spot]));
-
-    for (const trip of loadedTrips) {
-      await supabase.rpc("promote_surf_trip_waitlist", {
-        target_trip_id: trip.id,
-      });
-    }
-
-    const [refreshedPassengers, refreshedWaitlist] = await Promise.all([
-      supabase
-        .from("surf_trip_car_passengers")
-        .select("id, car_id, trip_id, user_id, slot_index, created_at")
-        .order("slot_index", { ascending: true }),
-      supabase
-        .from("surf_trip_waitlist")
-        .select("id, trip_id, user_id, waitlist_order, created_at")
-        .order("waitlist_order", { ascending: true }),
-    ]);
-
-    if (!refreshedPassengers.error) {
-      loadedPassengers = (refreshedPassengers.data ??
-        []) as SurfTripCarPassenger[];
-    }
-    if (!refreshedWaitlist.error) {
-      loadedWaitlist = (refreshedWaitlist.data ??
-        []) as SurfTripWaitlistEntry[];
-    }
 
     const tripsWithDetails: TripWithDetails[] = loadedTrips.map((trip) => {
       const tripCars = loadedCars
@@ -404,6 +381,11 @@ export default function TripsPage() {
       return;
     }
 
+    if (startDate <= getTaipeiDate()) {
+      setStatusMessage("外衝必須至少提前一天建立，才能在開始時正確計次。");
+      return;
+    }
+
     if (selectedSpotIds.length === 0) {
       setStatusMessage("請至少選擇一個地點。");
       return;
@@ -424,41 +406,19 @@ export default function TripsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const { data: tripData, error: tripError } = await supabase
-      .from("surf_trips")
-      .insert({
-        start_date: startDate,
-        end_date: endDate,
-        capacity: capacityValue,
-        leader_id: user.id,
-        min_surf_level: minSurfLevel || null,
-        note: note.trim() || null,
-        created_by: user.id,
-      })
-      .select(
-        "id, start_date, end_date, capacity, leader_id, min_surf_level, note, created_by, created_at, updated_at"
-      )
-      .single();
-
-    if (tripError || !tripData) {
-      setIsCreatingTrip(false);
-      setStatusMessage(`新增外衝失敗：${tripError?.message ?? "未知錯誤"}`);
-      return;
-    }
-
-    const tripId = (tripData as SurfTrip).id;
-    const { error: spotsError } = await supabase.from("surf_trip_spots").insert(
-      selectedSpotIds.map((spotId) => ({
-        trip_id: tripId,
-        spot_id: spotId,
-      }))
-    );
+    const { error: tripError } = await supabase.rpc("create_surf_trip", {
+      target_start_date: startDate,
+      target_end_date: endDate,
+      target_capacity: capacityValue,
+      target_min_surf_level: minSurfLevel,
+      target_note: note.trim(),
+      target_spot_ids: selectedSpotIds,
+    });
 
     setIsCreatingTrip(false);
 
-    if (spotsError) {
-      await supabase.from("surf_trips").delete().eq("id", tripId);
-      setStatusMessage(`新增外衝地點失敗：${spotsError.message}`);
+    if (tripError) {
+      setStatusMessage(`新增外衝失敗：${tripError.message}`);
       return;
     }
 
@@ -792,6 +752,7 @@ export default function TripsPage() {
                     <input
                       type="date"
                       value={startDate}
+                      min={getTaipeiDate(1)}
                       onChange={(event) => {
                         const nextStart = event.target.value;
                         setStartDate(nextStart);
@@ -941,6 +902,7 @@ export default function TripsPage() {
                       trip.min_surf_level
                     );
                     const waitlistFull = trip.waitlist.length >= 3;
+                    const hasStarted = Boolean(trip.participation_counted_at);
 
                     return (
                       <div
@@ -952,6 +914,11 @@ export default function TripsPage() {
                             <p className="text-base font-semibold text-text-primary">
                               {formatDateRange(trip.start_date, trip.end_date)}
                             </p>
+                            {hasStarted && (
+                              <p className="mt-1 text-xs font-medium text-success">
+                                已開始，車隊名單已完成外衝計次
+                              </p>
+                            )}
                             <p className="mt-1 text-sm text-text-secondary">
                               地點：
                               {trip.spots.length > 0
@@ -981,7 +948,7 @@ export default function TripsPage() {
                             >
                               聊天室
                             </Button>
-                            {isActivityLeader && (
+                            {isActivityLeader && !hasStarted && (
                               <Button
                                 type="button"
                                 variant="danger"
@@ -1067,7 +1034,7 @@ export default function TripsPage() {
                                     以上
                                   </span>
                                 )}
-                                {isActivityLeader && (
+                                {isActivityLeader && !hasStarted && (
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -1093,8 +1060,8 @@ export default function TripsPage() {
                           memberProfiles={memberProfiles}
                           currentUserId={user.id}
                           currentProfile={profile}
-                          canInteract={canCreate}
-                          isTripActivityLeader={isActivityLeader}
+                          canInteract={canCreate && !hasStarted}
+                          isTripActivityLeader={isActivityLeader && !hasStarted}
                           joiningKey={joiningKey}
                           removingSlotKey={removingSlotKey}
                           addingCarTripId={addingCarTripId}
@@ -1123,7 +1090,11 @@ export default function TripsPage() {
                               備取名單
                             </h3>
                             <div className="flex flex-wrap gap-2">
-                              {myWaitlist ? (
+                              {hasStarted ? (
+                                <span className="text-xs text-text-secondary">
+                                  外衝已開始，名單已鎖定
+                                </span>
+                              ) : myWaitlist ? (
                                 <>
                                   <span className="text-xs text-warning">
                                     備取第 {myWaitlist.waitlist_order} 位

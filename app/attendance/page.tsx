@@ -125,6 +125,28 @@ export default function AttendancePage() {
       setStatusMessage(`讀取社課失敗：${lessonsResult.error.message}`);
       return;
     }
+    if (membersResult.error) {
+      setStatusMessage(`讀取社員資料失敗：${membersResult.error.message}`);
+      return;
+    }
+    if (instructorsResult.error) {
+      setStatusMessage(`讀取教學名單失敗：${instructorsResult.error.message}`);
+      return;
+    }
+    if (participantsResult.error) {
+      setStatusMessage(`讀取參加名單失敗：${participantsResult.error.message}`);
+      return;
+    }
+    if (instructorAttendanceResult.error) {
+      setStatusMessage(
+        `讀取教學簽到失敗：${instructorAttendanceResult.error.message}`
+      );
+      return;
+    }
+    if (memberAttendanceResult.error) {
+      setStatusMessage(`讀取社員簽到失敗：${memberAttendanceResult.error.message}`);
+      return;
+    }
 
     const loadedLessons = (lessonsResult.data ?? []) as Lesson[];
     setLessons(loadedLessons);
@@ -186,15 +208,16 @@ export default function AttendancePage() {
   const lessonParticipants = useMemo(
     () =>
       participants
-        .filter((item) => item.lesson_id === selectedLessonId)
-        .sort((a, b) => {
-          if (a.status !== b.status) {
-            return a.status === "confirmed" ? -1 : 1;
-          }
-          return (a.waitlist_order ?? 0) - (b.waitlist_order ?? 0);
-        }),
+        .filter(
+          (item) =>
+            item.lesson_id === selectedLessonId && item.status === "confirmed"
+        ),
     [participants, selectedLessonId]
   );
+
+  const selectedLessonHasStarted = selectedLesson
+    ? hasLessonStarted(selectedLesson.lesson_date, selectedLesson.start_time)
+    : false;
 
   const instructorStats = useMemo(() => {
     const startedCount = startedLessons.length;
@@ -426,7 +449,9 @@ export default function AttendancePage() {
                     className="!min-h-9 !px-3 !text-xs"
                     onClick={() => void handleCheckInAllInstructors()}
                     disabled={
-                      isCheckingInAll || lessonInstructors.length === 0
+                      !selectedLessonHasStarted ||
+                      isCheckingInAll ||
+                      lessonInstructors.length === 0
                     }
                   >
                     {isCheckingInAll ? "簽到中..." : "一鍵簽到"}
@@ -461,6 +486,7 @@ export default function AttendancePage() {
                                 checked={Boolean(attendance?.checked_in)}
                                 disabled={
                                   !canOperateAttendance ||
+                                  !selectedLessonHasStarted ||
                                   savingKey === `instructor-${instructor.id}`
                                 }
                                 onChange={(event) =>
@@ -519,6 +545,7 @@ export default function AttendancePage() {
                                 checked={Boolean(attendance?.checked_in)}
                                 disabled={
                                   !canOperateAttendance ||
+                                  !selectedLessonHasStarted ||
                                   savingKey === `member-${participant.user_id}`
                                 }
                                 onChange={(event) =>
@@ -537,17 +564,7 @@ export default function AttendancePage() {
                               <SurfLevelBadge level={member?.surf_level} />
                             </td>
                             <td className="px-3 py-2">
-                              <Badge
-                                tone={
-                                  participant.status === "confirmed"
-                                    ? "success"
-                                    : "warning"
-                                }
-                              >
-                                {participant.status === "confirmed"
-                                  ? "正取"
-                                  : `備取 ${participant.waitlist_order}`}
-                              </Badge>
+                              <Badge tone="success">正取</Badge>
                             </td>
                           </tr>
                         );

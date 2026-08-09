@@ -285,9 +285,8 @@ async function uploadSurfboardImageFiles(
 export async function createSurfboard(input: {
   values: ParsedSurfboardValues;
   files: File[];
-  userId: string;
 }): Promise<SurfboardMutationResult> {
-  const { values, files, userId } = input;
+  const { values, files } = input;
 
   if (files.length === 0) {
     return { error: "請至少上傳 1 張圖片。" };
@@ -298,49 +297,31 @@ export async function createSurfboard(input: {
   }
 
   const supabase = createClient();
-
-  const { data: insertedBoard, error: insertError } = await supabase
-    .from("surfboards")
-    .insert({
-      name: values.name,
-      suitability_level: values.suitability_level,
-      board_types: values.board_types,
-      buoyancy: values.buoyancy,
-      length: values.length,
-      description: values.description,
-      created_by: userId,
-    })
-    .select("id")
-    .single();
-
-  if (insertError || !insertedBoard) {
-    return {
-      error: `新增衝浪板失敗：${insertError?.message ?? "未知錯誤"}`,
-    };
-  }
-
-  const surfboardId = (insertedBoard as { id: string }).id;
+  const surfboardId = crypto.randomUUID();
 
   const uploadResult = await uploadSurfboardImageFiles(surfboardId, files);
   if (uploadResult.error) {
-    await supabase.from("surfboards").delete().eq("id", surfboardId);
     return { error: uploadResult.error };
   }
 
-  const { error: imagesError } = await supabase.from("surfboard_images").insert(
-    uploadResult.paths.map((storagePath, index) => ({
-      surfboard_id: surfboardId,
-      storage_path: storagePath,
-      sort_order: index,
-    }))
+  const { error: createError } = await supabase.rpc(
+    "create_surfboard_with_images",
+    {
+      target_surfboard_id: surfboardId,
+      target_name: values.name,
+      target_suitability_level: values.suitability_level,
+      target_board_types: values.board_types,
+      target_buoyancy: values.buoyancy,
+      target_length: values.length,
+      target_description: values.description,
+      target_storage_paths: uploadResult.paths,
+    }
   );
 
-  if (imagesError) {
-    // 資料儲存失敗時清掉剛上傳的檔案與衝浪板資料，避免留下孤兒檔案。
+  if (createError) {
     const cleanupError = await removeStorageFiles(uploadResult.paths);
-    await supabase.from("surfboards").delete().eq("id", surfboardId);
     return {
-      error: `儲存圖片資料失敗：${imagesError.message}`,
+      error: `新增衝浪板失敗：${createError.message}`,
       warning: cleanupError
         ? `已上傳的圖片檔案清除失敗（${cleanupError}），請通知維護人員檢查 Storage：${uploadResult.paths.join("、")}`
         : undefined,
@@ -380,18 +361,27 @@ export async function updateSurfboard(input: {
     return { error: uploadResult.error };
   }
 
-  const { error: updateError } = await supabase
-    .from("surfboards")
-    .update({
-      name: values.name,
-      suitability_level: values.suitability_level,
-      board_types: values.board_types,
-      buoyancy: values.buoyancy,
-      length: values.length,
-      description: values.description,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", surfboardId);
+  let newFileIndex = 0;
+  const finalStoragePaths = finalImages.map((item) => {
+    if (item.kind === "existing") return item.image.storage_path;
+    const storagePath = uploadResult.paths[newFileIndex];
+    newFileIndex += 1;
+    return storagePath;
+  });
+
+  const { error: updateError } = await supabase.rpc(
+    "update_surfboard_with_images",
+    {
+      target_surfboard_id: surfboardId,
+      target_name: values.name,
+      target_suitability_level: values.suitability_level,
+      target_board_types: values.board_types,
+      target_buoyancy: values.buoyancy,
+      target_length: values.length,
+      target_description: values.description,
+      target_storage_paths: finalStoragePaths,
+    }
+  );
 
   if (updateError) {
     const cleanupError = await removeStorageFiles(uploadResult.paths);
@@ -401,80 +391,6 @@ export async function updateSurfboard(input: {
         ? `新上傳的圖片檔案清除失敗（${cleanupError}），請通知維護人員檢查 Storage。`
         : undefined,
     };
-  }
-
-  if (removedImages.length > 0) {
-    const { error: deleteRowsError } = await supabase
-      .from("surfboard_images")
-      .delete()
-      .in(
-        "id",
-        removedImages.map((image) => image.id)
-      );
-
-    if (deleteRowsError) {
-      const cleanupError = await removeStorageFiles(uploadResult.paths);
-      return {
-        error: `移除舊圖片失敗：${deleteRowsError.message}`,
-        warning: cleanupError
-          ? `新上傳的圖片檔案清除失敗（${cleanupError}），請通知維護人員檢查 Storage。`
-          : undefined,
-      };
-    }
-  }
-
-  // 依照最終順序更新既有圖片的 sort_order，並插入新圖片。
-  let newFileIndex = 0;
-  const newImageRows: Array<{
-    surfboard_id: string;
-    storage_path: string;
-    sort_order: number;
-  }> = [];
-
-  for (let index = 0; index < finalImages.length; index += 1) {
-    const item = finalImages[index];
-
-    if (item.kind === "existing") {
-      if (item.image.sort_order !== index) {
-        const { error: sortError } = await supabase
-          .from("surfboard_images")
-          .update({ sort_order: index })
-          .eq("id", item.image.id);
-
-        if (sortError) {
-          const cleanupError = await removeStorageFiles(uploadResult.paths);
-          return {
-            error: `更新圖片順序失敗：${sortError.message}`,
-            warning: cleanupError
-              ? `新上傳的圖片檔案清除失敗（${cleanupError}），請通知維護人員檢查 Storage。`
-              : undefined,
-          };
-        }
-      }
-    } else {
-      newImageRows.push({
-        surfboard_id: surfboardId,
-        storage_path: uploadResult.paths[newFileIndex],
-        sort_order: index,
-      });
-      newFileIndex += 1;
-    }
-  }
-
-  if (newImageRows.length > 0) {
-    const { error: insertImagesError } = await supabase
-      .from("surfboard_images")
-      .insert(newImageRows);
-
-    if (insertImagesError) {
-      const cleanupError = await removeStorageFiles(uploadResult.paths);
-      return {
-        error: `儲存新圖片資料失敗：${insertImagesError.message}`,
-        warning: cleanupError
-          ? `新上傳的圖片檔案清除失敗（${cleanupError}），請通知維護人員檢查 Storage。`
-          : undefined,
-      };
-    }
   }
 
   const removedCleanupError = await removeStorageFiles(

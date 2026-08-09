@@ -80,6 +80,7 @@ export type SurfTrip = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  participation_counted_at: string | null;
 };
 
 export type SurfTripSpot = {
