@@ -575,6 +575,25 @@ export type SaveHomepageResult = {
 };
 
 /**
+ * 把資料庫端的技術性錯誤轉成可行動的訊息。
+ * 最常見的原因是 docs/sql/add_homepage_management.sql 還沒執行或不是最新版。
+ */
+function describeSaveError(message: string) {
+  const needsMigration =
+    /where clause/i.test(message) ||
+    /save_homepage/i.test(message) ||
+    /schema cache/i.test(message) ||
+    /does not exist/i.test(message) ||
+    /homepage_(content|media|officers)/i.test(message);
+
+  if (needsMigration) {
+    return `儲存首頁內容失敗：${message}（請確認已在 Supabase 執行最新版的 docs/sql/add_homepage_management.sql）`;
+  }
+
+  return `儲存首頁內容失敗：${message}`;
+}
+
+/**
  * 統一儲存首頁草稿。
  *
  * 流程：先上傳所有新圖片 → 呼叫 save_homepage RPC 一次性寫入（單一交易）
@@ -705,7 +724,7 @@ export async function saveHomepageDraft({
     if (rpcError) {
       const cleanupError = await removeStorageFiles(uploadedPaths);
       return {
-        error: `儲存首頁內容失敗：${rpcError.message}`,
+        error: describeSaveError(rpcError.message),
         warning: cleanupError
           ? `新上傳的圖片清除失敗（${cleanupError}），請通知維護人員檢查 Storage。`
           : undefined,

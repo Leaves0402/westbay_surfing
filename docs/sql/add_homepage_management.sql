@@ -321,6 +321,8 @@ declare
   single_kind text;
   single_item jsonb;
   actor uuid := auth.uid();
+  content_id uuid;
+  officer_ids uuid[];
 begin
   if actor is null then
     raise exception '請先登入。';
@@ -354,8 +356,12 @@ begin
     raise exception '特色項目格式不正確。';
   end if;
 
-  -- 文字內容（單列 upsert）
-  if exists (select 1 from public.homepage_content) then
+  -- 文字內容（單列 upsert）。
+  -- Supabase 預設啟用 pg-safeupdate，沒有 WHERE 的 UPDATE / DELETE 會被拒絕，
+  -- 所以這裡先取出單列的 id，再用 id 當條件更新。
+  select id into content_id from public.homepage_content limit 1;
+
+  if content_id is not null then
     update public.homepage_content
     set
       hero_title = content_payload ->> 'hero_title',
@@ -384,7 +390,8 @@ begin
         coalesce(content_payload ->> 'footer_admin_contact', ''),
         ''
       ),
-      updated_by = actor;
+      updated_by = actor
+    where id = content_id;
   else
     insert into public.homepage_content (
       hero_title,
@@ -468,8 +475,14 @@ begin
     end if;
   end loop;
 
-  -- 首頁展示幹部：整組取代（不會動到 profiles.role）
-  delete from public.homepage_officers;
+  -- 首頁展示幹部：整組取代（不會動到 profiles.role）。
+  -- 先取出所有 id 再依 id 刪除，讓「刪除全部」也帶有明確的 WHERE，
+  -- 符合 pg-safeupdate 的要求。
+  select array_agg(id) into officer_ids from public.homepage_officers;
+
+  if officer_ids is not null then
+    delete from public.homepage_officers where id = any(officer_ids);
+  end if;
 
   for officer_item in select * from jsonb_array_elements(officers_payload)
   loop
