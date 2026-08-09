@@ -18,13 +18,11 @@ import {
   canViewAttendancePage,
 } from "@/lib/permissions";
 import { formatLessonLabel, hasLessonStarted } from "@/lib/lessonTime";
-import {
-  countInstructorTeaching,
-  countLessonAttendance,
-} from "@/lib/lessonStats";
 import { createClient } from "@/lib/supabase/client";
+import { getTaipeiDate } from "@/lib/taipeiTime";
 import type {
   Lesson,
+  LessonAttendanceOverview,
   LessonInstructor,
   LessonInstructorAttendance,
   LessonMemberAttendance,
@@ -56,9 +54,17 @@ export default function AttendancePage() {
   const [allMemberAttendance, setAllMemberAttendance] = useState<
     LessonMemberAttendance[]
   >([]);
+  const [attendanceOverview, setAttendanceOverview] = useState<
+    Record<
+      string,
+      { attendanceCount: number; teachingCount: number }
+    >
+  >({});
+  const [startedLessonCount, setStartedLessonCount] = useState(0);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [isCheckingInAll, setIsCheckingInAll] = useState(false);
+  const [promotingUserId, setPromotingUserId] = useState<string | null>(null);
 
   const selectedLesson =
     lessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
@@ -70,65 +76,83 @@ export default function AttendancePage() {
     [members]
   );
 
-  const startedLessons = useMemo(
-    () =>
-      lessons.filter((lesson) =>
-        hasLessonStarted(lesson.lesson_date, lesson.start_time)
-      ),
-    [lessons]
-  );
-
   const loadData = useCallback(async () => {
     setIsLoadingData(true);
     setStatusMessage("");
     const supabase = createClient();
+    const lessonWindowStart = getTaipeiDate(-365);
+    const lessonWindowEnd = getTaipeiDate(90);
 
-    const [
-      lessonsResult,
-      membersResult,
-      instructorsResult,
-      participantsResult,
-      instructorAttendanceResult,
-      memberAttendanceResult,
-    ] = await Promise.all([
+    const [lessonsResult, membersResult, overviewResult] = await Promise.all([
       supabase
         .from("lessons")
         .select(
           "id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"
         )
+        .gte("lesson_date", lessonWindowStart)
+        .lte("lesson_date", lessonWindowEnd)
         .order("lesson_date", { ascending: false })
         .order("start_time", { ascending: false }),
       supabase
         .from("public_member_profiles")
         .select("id, full_name, student_id, surf_level, role"),
-      supabase.from("lesson_instructors").select("lesson_id, instructor_id"),
-      supabase
-        .from("lesson_participants")
-        .select(
-          "id, lesson_id, user_id, status, waitlist_order, created_at, updated_at"
-        ),
-      supabase
-        .from("lesson_instructor_attendance")
-        .select(
-          "id, lesson_id, instructor_id, checked_in, checked_in_by, checked_in_at"
-        ),
-      supabase
-        .from("lesson_member_attendance")
-        .select(
-          "id, lesson_id, user_id, checked_in, checked_in_by, checked_in_at"
-        ),
+      supabase.rpc("get_lesson_attendance_overview"),
     ]);
 
-    setIsLoadingData(false);
-
     if (lessonsResult.error) {
+      setIsLoadingData(false);
       setStatusMessage(`讀取社課失敗：${lessonsResult.error.message}`);
       return;
     }
     if (membersResult.error) {
+      setIsLoadingData(false);
       setStatusMessage(`讀取社員資料失敗：${membersResult.error.message}`);
       return;
     }
+    if (overviewResult.error) {
+      setIsLoadingData(false);
+      setStatusMessage(`讀取出席統計失敗：${overviewResult.error.message}`);
+      return;
+    }
+
+    const loadedLessons = (lessonsResult.data ?? []) as Lesson[];
+    const lessonIds = loadedLessons.map((lesson) => lesson.id);
+    const emptyResult = { data: [], error: null };
+
+    const [
+      instructorsResult,
+      participantsResult,
+      instructorAttendanceResult,
+      memberAttendanceResult,
+    ] = lessonIds.length
+      ? await Promise.all([
+          supabase
+            .from("lesson_instructors")
+            .select("lesson_id, instructor_id")
+            .in("lesson_id", lessonIds),
+          supabase
+            .from("lesson_participants")
+            .select(
+              "id, lesson_id, user_id, status, waitlist_order, created_at, updated_at"
+            )
+            .in("lesson_id", lessonIds),
+          supabase
+            .from("lesson_instructor_attendance")
+            .select(
+              "id, lesson_id, instructor_id, checked_in, checked_in_by, checked_in_at"
+            )
+            .in("lesson_id", lessonIds),
+          supabase
+            .from("lesson_member_attendance")
+            .select(
+              "id, lesson_id, user_id, checked_in, checked_in_by, checked_in_at"
+            )
+            .in("lesson_id", lessonIds),
+        ])
+      : [emptyResult, emptyResult, emptyResult, emptyResult];
+
+    setIsLoadingData(false);
+
     if (instructorsResult.error) {
       setStatusMessage(`讀取教學名單失敗：${instructorsResult.error.message}`);
       return;
@@ -148,7 +172,8 @@ export default function AttendancePage() {
       return;
     }
 
-    const loadedLessons = (lessonsResult.data ?? []) as Lesson[];
+    const overviewRows = (overviewResult.data ??
+      []) as LessonAttendanceOverview[];
     setLessons(loadedLessons);
     setMembers((membersResult.data ?? []) as PublicMemberProfile[]);
     setInstructors((instructorsResult.data ?? []) as LessonInstructor[]);
@@ -159,14 +184,37 @@ export default function AttendancePage() {
     setAllMemberAttendance(
       (memberAttendanceResult.data ?? []) as LessonMemberAttendance[]
     );
+    setAttendanceOverview(
+      Object.fromEntries(
+        overviewRows.map((row) => [
+          row.user_id,
+          {
+            attendanceCount: Number(row.attendance_count),
+            teachingCount: Number(row.teaching_count),
+          },
+        ])
+      )
+    );
+    setStartedLessonCount(
+      overviewRows.length > 0
+        ? Number(overviewRows[0].started_lesson_count)
+        : 0
+    );
 
     setSelectedLessonId((current) => {
       if (current && loadedLessons.some((lesson) => lesson.id === current)) {
         return current;
       }
-      const upcoming = loadedLessons.find(
-        (lesson) => !hasLessonStarted(lesson.lesson_date, lesson.start_time)
-      );
+      const upcoming = loadedLessons
+        .filter(
+          (lesson) => !hasLessonStarted(lesson.lesson_date, lesson.start_time)
+        )
+        .sort((a, b) => {
+          const dateCompare = a.lesson_date.localeCompare(b.lesson_date);
+          return dateCompare !== 0
+            ? dateCompare
+            : a.start_time.localeCompare(b.start_time);
+        })[0];
       return upcoming?.id ?? loadedLessons[0]?.id ?? "";
     });
   }, [setStatusMessage]);
@@ -208,31 +256,28 @@ export default function AttendancePage() {
   const lessonParticipants = useMemo(
     () =>
       participants
-        .filter(
-          (item) =>
-            item.lesson_id === selectedLessonId && item.status === "confirmed"
-        ),
+        .filter((item) => item.lesson_id === selectedLessonId)
+        .sort((a, b) => {
+          if (a.status !== b.status) return a.status === "confirmed" ? -1 : 1;
+          return (a.waitlist_order ?? 0) - (b.waitlist_order ?? 0);
+        }),
     [participants, selectedLessonId]
   );
 
-  const selectedLessonHasStarted = selectedLesson
-    ? hasLessonStarted(selectedLesson.lesson_date, selectedLesson.start_time)
-    : false;
+  const confirmedParticipantCount = lessonParticipants.filter(
+    (participant) => participant.status === "confirmed"
+  ).length;
+  const firstWaitlistUserId =
+    lessonParticipants.find((participant) => participant.status === "waitlist")
+      ?.user_id ?? null;
 
   const instructorStats = useMemo(() => {
-    const startedCount = startedLessons.length;
-    const startedIds = new Set(startedLessons.map((lesson) => lesson.id));
-
     return members
       .filter((member) => member.role === "officer" || member.role === "admin")
       .map((member) => ({
         member,
-        teachingCount: countInstructorTeaching(
-          member.id,
-          startedIds,
-          allInstructorAttendance
-        ),
-        total: startedCount,
+        teachingCount: attendanceOverview[member.id]?.teachingCount ?? 0,
+        total: startedLessonCount,
       }))
       .sort((a, b) => {
         if (b.teachingCount !== a.teachingCount) {
@@ -248,22 +293,14 @@ export default function AttendancePage() {
           "zh-Hant"
         );
       });
-  }, [allInstructorAttendance, members, startedLessons]);
+  }, [attendanceOverview, members, startedLessonCount]);
 
   const memberStats = useMemo(() => {
-    const startedCount = startedLessons.length;
-    const startedIds = new Set(startedLessons.map((lesson) => lesson.id));
-
     return members
       .map((member) => ({
         member,
-        count: countLessonAttendance(
-          member.id,
-          startedIds,
-          allMemberAttendance,
-          allInstructorAttendance
-        ),
-        total: startedCount,
+        count: attendanceOverview[member.id]?.attendanceCount ?? 0,
+        total: startedLessonCount,
       }))
       .sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
@@ -277,12 +314,7 @@ export default function AttendancePage() {
           "zh-Hant"
         );
       });
-  }, [
-    allInstructorAttendance,
-    allMemberAttendance,
-    members,
-    startedLessons,
-  ]);
+  }, [attendanceOverview, members, startedLessonCount]);
 
   const toggleInstructorAttendance = async (
     instructorId: string,
@@ -306,6 +338,13 @@ export default function AttendancePage() {
 
   const toggleMemberAttendance = async (userId: string, checked: boolean) => {
     if (!selectedLessonId || !canOperateAttendance) return;
+    const participant = lessonParticipants.find(
+      (item) => item.user_id === userId
+    );
+    if (participant?.status !== "confirmed") {
+      setStatusMessage("候補社員必須先正式遞補，才能簽到。");
+      return;
+    }
     setSavingKey(`member-${userId}`);
     const supabase = createClient();
     const { error } = await supabase.rpc("set_lesson_member_attendance", {
@@ -318,6 +357,27 @@ export default function AttendancePage() {
       setStatusMessage(`更新社員簽到失敗：${error.message}`);
       return;
     }
+    await loadData();
+  };
+
+  const handlePromoteWaitlistMember = async (userId: string) => {
+    if (!selectedLessonId || !canOperateAttendance) return;
+
+    setPromotingUserId(userId);
+    setStatusMessage("");
+    const supabase = createClient();
+    const { error } = await supabase.rpc("promote_lesson_waitlist_member", {
+      target_lesson_id: selectedLessonId,
+      target_user_id: userId,
+    });
+    setPromotingUserId(null);
+
+    if (error) {
+      setStatusMessage(`正式遞補失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("候補社員已正式遞補，現在可以簽到。");
     await loadData();
   };
 
@@ -364,7 +424,7 @@ export default function AttendancePage() {
             <div>
               <h1 className="text-2xl font-bold text-text-primary">簽到</h1>
               <p className="mt-1 text-sm text-text-secondary">
-                本堂社課教學可簽到；統計僅計算已開始的社課。
+                教學與正取社員可簽到；候補需先正式遞補。簽到不限時間，統計僅計算已開始的社課。
               </p>
             </div>
           </div>
@@ -449,7 +509,6 @@ export default function AttendancePage() {
                     className="!min-h-9 !px-3 !text-xs"
                     onClick={() => void handleCheckInAllInstructors()}
                     disabled={
-                      !selectedLessonHasStarted ||
                       isCheckingInAll ||
                       lessonInstructors.length === 0
                     }
@@ -486,7 +545,6 @@ export default function AttendancePage() {
                                 checked={Boolean(attendance?.checked_in)}
                                 disabled={
                                   !canOperateAttendance ||
-                                  !selectedLessonHasStarted ||
                                   savingKey === `instructor-${instructor.id}`
                                 }
                                 onChange={(event) =>
@@ -519,7 +577,7 @@ export default function AttendancePage() {
                 <p className="text-sm text-text-secondary">本堂尚無參加者。</p>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-line">
-                  <table className="w-full min-w-[480px] text-left text-sm">
+                  <table className="w-full min-w-[620px] text-left text-sm">
                     <thead className="bg-appBg text-xs text-text-secondary">
                       <tr>
                         <th className="px-3 py-2">簽到</th>
@@ -545,7 +603,7 @@ export default function AttendancePage() {
                                 checked={Boolean(attendance?.checked_in)}
                                 disabled={
                                   !canOperateAttendance ||
-                                  !selectedLessonHasStarted ||
+                                  participant.status !== "confirmed" ||
                                   savingKey === `member-${participant.user_id}`
                                 }
                                 onChange={(event) =>
@@ -564,7 +622,45 @@ export default function AttendancePage() {
                               <SurfLevelBadge level={member?.surf_level} />
                             </td>
                             <td className="px-3 py-2">
-                              <Badge tone="success">正取</Badge>
+                              {participant.status === "confirmed" ? (
+                                <Badge tone="success">正取</Badge>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge tone="warning">
+                                    候補 {participant.waitlist_order ?? ""}
+                                  </Badge>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="!min-h-8 !px-2 !text-xs"
+                                    disabled={
+                                      participant.user_id !== firstWaitlistUserId ||
+                                      !selectedLesson ||
+                                      confirmedParticipantCount >=
+                                        selectedLesson.capacity ||
+                                      promotingUserId !== null
+                                    }
+                                    onClick={() =>
+                                      void handlePromoteWaitlistMember(
+                                        participant.user_id
+                                      )
+                                    }
+                                    title={
+                                      confirmedParticipantCount >=
+                                      (selectedLesson?.capacity ?? 0)
+                                        ? "正取名額已滿，需先釋出名額"
+                                        : participant.user_id !==
+                                            firstWaitlistUserId
+                                          ? "必須依候補順序遞補"
+                                          : "正式遞補後才能簽到"
+                                    }
+                                  >
+                                    {promotingUserId === participant.user_id
+                                      ? "遞補中..."
+                                      : "正式遞補"}
+                                  </Button>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );

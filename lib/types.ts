@@ -23,6 +23,19 @@ export type PublicMemberProfile = {
   role: Role;
 };
 
+export type AdminGovernance = {
+  owner_user_id: string;
+  additional_admin_count: number;
+  additional_admin_limit: number;
+};
+
+export type LessonAttendanceOverview = {
+  user_id: string;
+  attendance_count: number;
+  teaching_count: number;
+  started_lesson_count: number;
+};
+
 export type Announcement = {
   id: string;
   title: string;

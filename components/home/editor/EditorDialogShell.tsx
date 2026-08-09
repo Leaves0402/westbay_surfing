@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useDialogAccessibility } from "@/lib/useDialogAccessibility";
 
@@ -26,6 +26,8 @@ export function EditorDialogShell({
   maxWidthClassName?: string;
 }) {
   const panelRef = useDialogAccessibility({ onClose, isBusy });
+  const titleId = useId();
+  const descriptionId = useId();
 
   return (
     <div
@@ -41,14 +43,20 @@ export function EditorDialogShell({
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
         className={`flex max-h-[92vh] w-full ${maxWidthClassName} flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-lg`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
-            <h2 className="font-semibold text-slate-900">{title}</h2>
+            <h2 id={titleId} className="font-semibold text-slate-900">
+              {title}
+            </h2>
             {description && (
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p
+                id={descriptionId}
+                className="mt-1 text-xs leading-5 text-slate-500"
+              >
                 {description}
               </p>
             )}

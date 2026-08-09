@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   AlertTriangle,
   ChevronLeft,
@@ -103,6 +103,7 @@ export function SurfboardDialog({
   onDeleted: (message: string) => Promise<void>;
 }) {
   const isCreateMode = board === null;
+  const titleId = useId();
 
   const [isEditing, setIsEditing] = useState(isCreateMode);
   const [form, setForm] = useState<SurfboardFormData>(() =>
@@ -384,11 +385,13 @@ export function SurfboardDialog({
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
         className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-lg"
       >
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
-          <h2 className="font-semibold text-slate-900">{title}</h2>
+          <h2 id={titleId} className="font-semibold text-slate-900">
+            {title}
+          </h2>
 
           <div className="flex flex-wrap items-center gap-2">
             {!isCreateMode && !isEditing && (

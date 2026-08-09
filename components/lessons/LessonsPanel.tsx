@@ -60,45 +60,61 @@ export function LessonsPanel({
   const loadLessons = useCallback(async () => {
     setIsLoading(true);
     const supabase = createClient();
+    const lessonWindowStart = getTaipeiDate(-30);
+    const lessonWindowEnd = getTaipeiDate(365);
 
-    const [lessonsResult, instructorsResult, participantsResult, membersResult] =
-      await Promise.all([
+    const [lessonsResult, membersResult] = await Promise.all([
         supabase
           .from("lessons")
           .select(
             "id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"
           )
+          .gte("lesson_date", lessonWindowStart)
+          .lte("lesson_date", lessonWindowEnd)
           .order("lesson_date", { ascending: true })
           .order("start_time", { ascending: true }),
-        supabase
-          .from("lesson_instructors")
-          .select("lesson_id, instructor_id"),
-        supabase
-          .from("lesson_participants")
-          .select(
-            "id, lesson_id, user_id, status, waitlist_order, created_at, updated_at"
-          ),
         supabase
           .from("public_member_profiles")
           .select("id, full_name, student_id, surf_level, role"),
       ]);
 
-    setIsLoading(false);
-
     if (lessonsResult.error) {
+      setIsLoading(false);
       onStatusMessage(`讀取社課失敗：${lessonsResult.error.message}`);
       return;
     }
+    if (membersResult.error) {
+      setIsLoading(false);
+      onStatusMessage(`讀取社員資料失敗：${membersResult.error.message}`);
+      return;
+    }
+
+    const lessonRows = (lessonsResult.data ?? []) as Lesson[];
+    const lessonIds = lessonRows.map((lesson) => lesson.id);
+    const emptyResult = { data: [], error: null };
+    const [instructorsResult, participantsResult] = lessonIds.length
+      ? await Promise.all([
+          supabase
+            .from("lesson_instructors")
+            .select("lesson_id, instructor_id")
+            .in("lesson_id", lessonIds),
+          supabase
+            .from("lesson_participants")
+            .select(
+              "id, lesson_id, user_id, status, waitlist_order, created_at, updated_at"
+            )
+            .in("lesson_id", lessonIds),
+        ])
+      : [emptyResult, emptyResult];
+
+    setIsLoading(false);
+
     if (instructorsResult.error) {
       onStatusMessage(`讀取教學名單失敗：${instructorsResult.error.message}`);
       return;
     }
     if (participantsResult.error) {
       onStatusMessage(`讀取報名名單失敗：${participantsResult.error.message}`);
-      return;
-    }
-    if (membersResult.error) {
-      onStatusMessage(`讀取社員資料失敗：${membersResult.error.message}`);
       return;
     }
 
@@ -113,8 +129,6 @@ export function LessonsPanel({
         (member) => member.role === "officer" || member.role === "admin"
       )
     );
-
-    const lessonRows = (lessonsResult.data ?? []) as Lesson[];
 
     setLessons(
       lessonRows.map((lesson) => ({

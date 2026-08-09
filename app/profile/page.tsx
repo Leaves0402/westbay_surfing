@@ -10,8 +10,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { getRoleTone } from "@/lib/badgeTones";
-import { hasLessonStarted } from "@/lib/lessonTime";
-import { countLessonAttendance } from "@/lib/lessonStats";
 import { canUseMemberFeatures } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -19,9 +17,6 @@ import {
   reviewRequiredSurfLevels,
   roleLabels,
   surfLevelDescriptions,
-  type Lesson,
-  type LessonInstructorAttendance,
-  type LessonMemberAttendance,
   type Profile,
   type SurfLevel,
 } from "@/lib/types";
@@ -58,7 +53,7 @@ export default function ProfilePage() {
             <div>
               <h1 className="text-2xl font-bold text-text-primary">社員基本資料</h1>
               <p className="mt-1 text-sm text-text-secondary">
-                填寫姓名、學號與衝浪程度。初階與中階可直接更新，中進階與進階需由幹部或管理員審核。
+                填寫姓名、學號與衝浪程度。初階與中階可直接更新，中進階與進階需由管理員審核；進階核准後會自動晉升為管理員。
               </p>
             </div>
           </div>
@@ -134,60 +129,26 @@ function LessonAttendanceStatCard({ userId }: { userId: string }) {
       setIsLoading(true);
       setLoadError("");
       const supabase = createClient();
-      const [lessonsResult, memberAttendanceResult, instructorAttendanceResult] =
-        await Promise.all([
-          supabase
-            .from("lessons")
-            .select(
-              "id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"
-            ),
-          supabase
-            .from("lesson_member_attendance")
-            .select(
-              "id, lesson_id, user_id, checked_in, checked_in_by, checked_in_at"
-            )
-            .eq("user_id", userId)
-            .eq("checked_in", true),
-          supabase
-            .from("lesson_instructor_attendance")
-            .select(
-              "id, lesson_id, instructor_id, checked_in, checked_in_by, checked_in_at"
-            )
-            .eq("instructor_id", userId)
-            .eq("checked_in", true),
-        ]);
+      const summaryResult = await supabase.rpc(
+        "get_my_lesson_attendance_summary"
+      );
 
       if (!active) return;
 
-      const firstError =
-        lessonsResult.error ??
-        memberAttendanceResult.error ??
-        instructorAttendanceResult.error;
-      if (firstError) {
-        setLoadError(`讀取出席統計失敗：${firstError.message}`);
+      if (summaryResult.error) {
+        setLoadError(`讀取出席統計失敗：${summaryResult.error.message}`);
         setIsLoading(false);
         return;
       }
 
-      const lessons = (lessonsResult.data ?? []) as Lesson[];
-      const memberAttendance = (memberAttendanceResult.data ??
-        []) as LessonMemberAttendance[];
-      const instructorAttendance = (instructorAttendanceResult.data ??
-        []) as LessonInstructorAttendance[];
-      const startedLessons = lessons.filter((lesson) =>
-        hasLessonStarted(lesson.lesson_date, lesson.start_time)
-      );
-      const startedIds = new Set(startedLessons.map((lesson) => lesson.id));
-
-      setStartedLessonCount(startedLessons.length);
-      setAttendedCount(
-        countLessonAttendance(
-          userId,
-          startedIds,
-          memberAttendance,
-          instructorAttendance
-        )
-      );
+      const summary = (summaryResult.data?.[0] ?? null) as
+        | {
+            attended_count: number | string;
+            started_lesson_count: number | string;
+          }
+        | null;
+      setStartedLessonCount(Number(summary?.started_lesson_count ?? 0));
+      setAttendedCount(Number(summary?.attended_count ?? 0));
       setIsLoading(false);
     };
 
@@ -325,7 +286,7 @@ function ProfileForm({
             className="mt-0.5 shrink-0 text-warning"
           />
           <p className="text-sm leading-6 text-text-primary/80">
-            已送出{profile.requested_surf_level}程度審核，等待幹部或管理員處理。
+            已送出{profile.requested_surf_level}程度審核，等待管理員處理。
           </p>
         </div>
       )}

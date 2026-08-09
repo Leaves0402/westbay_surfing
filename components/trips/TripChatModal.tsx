@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { MessageCircle, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { fieldControlClasses } from "@/components/ui/FormField";
@@ -37,6 +37,8 @@ export function TripChatModal({
   onError,
 }: TripChatModalProps) {
   const panelRef = useDialogAccessibility({ onClose });
+  const titleId = useId();
+  const descriptionId = useId();
   const [messages, setMessages] = useState<SurfTripMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -115,16 +117,24 @@ export function TripChatModal({
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label="外衝聊天室"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-surface shadow-lg"
       >
         <div className="flex items-start justify-between gap-3 border-b border-line p-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <MessageCircle size={18} className="shrink-0 text-primary" />
-              <h2 className="font-semibold text-text-primary">外衝聊天室</h2>
+              <h2 id={titleId} className="font-semibold text-text-primary">
+                外衝聊天室
+              </h2>
             </div>
-            <p className="mt-1 truncate text-xs text-text-secondary">{title}</p>
+            <p
+              id={descriptionId}
+              className="mt-1 truncate text-xs text-text-secondary"
+            >
+              {title}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button

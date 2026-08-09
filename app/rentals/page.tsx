@@ -47,6 +47,7 @@ import {
   isRentalSlotExpired,
   isRentalSlotStartInFuture,
   parseLocalDate,
+  toDateString,
   weekdayLabels,
 } from "@/lib/rentalSlots";
 import {
@@ -314,47 +315,127 @@ export default function RentalsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const [slotsResult, registrationsResult, membersResult] = await Promise.all([
+    const rangeStart = calendarCells[0]
+      ? toDateString(calendarCells[0].date)
+      : getTaipeiTodayDate();
+    const lastCalendarCell = calendarCells[calendarCells.length - 1];
+    const rangeEnd = lastCalendarCell
+      ? toDateString(lastCalendarCell.date)
+      : rangeStart;
+
+    const [slotsResult, membersResult] = await Promise.all([
       supabase
         .from("rental_slots")
         .select(
           "id, rental_date, start_time, end_time, capacity, board_manager_id, min_surf_level, note, is_open, created_by, created_at, updated_at"
         )
+        .gte("rental_date", rangeStart)
+        .lte("rental_date", rangeEnd)
         .order("rental_date", { ascending: true })
         .order("start_time", { ascending: true }),
-      supabase
-        .from("rental_registrations")
-        .select(
-          "id, rental_slot_id, user_id, surfboard_id, is_paid, paid_at, paid_by, created_at, updated_at"
-        )
-        .order("created_at", { ascending: true }),
       supabase
         .from("public_member_profiles")
         .select("id, full_name, student_id, surf_level, role"),
     ]);
 
-    setIsLoadingRentals(false);
-
     if (slotsResult.error) {
+      setIsLoadingRentals(false);
       setStatusMessage(`讀取租板時段失敗：${slotsResult.error.message}`);
       return;
     }
 
-    if (registrationsResult.error) {
-      setStatusMessage(`讀取租板登記失敗：${registrationsResult.error.message}`);
-      return;
-    }
-
     if (membersResult.error) {
+      setIsLoadingRentals(false);
       setStatusMessage(`讀取社員公開資料失敗：${membersResult.error.message}`);
       return;
     }
 
-    setRentalSlots((slotsResult.data ?? []) as RentalSlot[]);
-    setRentalRegistrations(
-      (registrationsResult.data ?? []) as RentalRegistration[]
+    const visibleSlots = (slotsResult.data ?? []) as RentalSlot[];
+    const visibleSlotIds = visibleSlots.map((slot) => slot.id);
+    const registrationColumns =
+      "id, rental_slot_id, user_id, surfboard_id, is_paid, paid_at, paid_by, created_at, updated_at";
+    const emptyResult = { data: [], error: null };
+
+    let outstandingQuery = supabase
+      .from("rental_registrations")
+      .select(registrationColumns)
+      .eq("is_paid", false)
+      .order("created_at", { ascending: true });
+
+    if (!canViewUnpaid && user) {
+      outstandingQuery = outstandingQuery.eq("user_id", user.id);
+    }
+
+    const [visibleRegistrationsResult, outstandingRegistrationsResult] =
+      await Promise.all([
+        visibleSlotIds.length
+          ? supabase
+              .from("rental_registrations")
+              .select(registrationColumns)
+              .in("rental_slot_id", visibleSlotIds)
+              .order("created_at", { ascending: true })
+          : Promise.resolve(emptyResult),
+        user ? outstandingQuery : Promise.resolve(emptyResult),
+      ]);
+
+    if (visibleRegistrationsResult.error) {
+      setIsLoadingRentals(false);
+      setStatusMessage(
+        `讀取本月租板登記失敗：${visibleRegistrationsResult.error.message}`
+      );
+      return;
+    }
+
+    if (outstandingRegistrationsResult.error) {
+      setIsLoadingRentals(false);
+      setStatusMessage(
+        `讀取未繳費紀錄失敗：${outstandingRegistrationsResult.error.message}`
+      );
+      return;
+    }
+
+    const registrationMap = new Map<string, RentalRegistration>();
+    for (const registration of [
+      ...((visibleRegistrationsResult.data ?? []) as RentalRegistration[]),
+      ...((outstandingRegistrationsResult.data ?? []) as RentalRegistration[]),
+    ]) {
+      registrationMap.set(registration.id, registration);
+    }
+    const loadedRegistrations = Array.from(registrationMap.values());
+    const visibleSlotIdSet = new Set(visibleSlotIds);
+    const outstandingSlotIds = Array.from(
+      new Set(
+        loadedRegistrations
+          .filter(
+            (registration) =>
+              !registration.is_paid &&
+              !visibleSlotIdSet.has(registration.rental_slot_id)
+          )
+          .map((registration) => registration.rental_slot_id)
+      )
     );
-    setMemberProfiles((membersResult.data ?? []) as PublicMemberProfile[]);
+
+    const outstandingSlotsResult = outstandingSlotIds.length
+      ? await supabase
+          .from("rental_slots")
+          .select(
+            "id, rental_date, start_time, end_time, capacity, board_manager_id, min_surf_level, note, is_open, created_by, created_at, updated_at"
+          )
+          .in("id", outstandingSlotIds)
+      : emptyResult;
+
+    if (outstandingSlotsResult.error) {
+      setIsLoadingRentals(false);
+      setStatusMessage(
+        `讀取未繳費時段失敗：${outstandingSlotsResult.error.message}`
+      );
+      return;
+    }
+
+    const loadedSlots = [
+      ...visibleSlots,
+      ...((outstandingSlotsResult.data ?? []) as RentalSlot[]),
+    ];
 
     if (canManageSlots) {
       const staffResult = await supabase
@@ -365,6 +446,7 @@ export default function RentalsPage() {
         .order("full_name", { ascending: true });
 
       if (staffResult.error) {
+        setIsLoadingRentals(false);
         setStatusMessage(`讀取負責人名單失敗：${staffResult.error.message}`);
         return;
       }
@@ -373,7 +455,23 @@ export default function RentalsPage() {
     } else {
       setStaffProfiles([]);
     }
-  }, [canManageSlots, setStatusMessage]);
+
+    setRentalSlots(loadedSlots);
+    setRentalRegistrations(loadedRegistrations);
+    setMemberProfiles((membersResult.data ?? []) as PublicMemberProfile[]);
+    setSelectedSlotId((current) =>
+      current && loadedSlots.some((slot) => slot.id === current)
+        ? current
+        : null
+    );
+    setIsLoadingRentals(false);
+  }, [
+    calendarCells,
+    canManageSlots,
+    canViewUnpaid,
+    setStatusMessage,
+    user,
+  ]);
 
   const loadSurfboardData = useCallback(async () => {
     setIsLoadingSurfboards(true);
@@ -422,7 +520,14 @@ export default function RentalsPage() {
 
   const moveMonth = (offset: number) => {
     setMonthCursor(
-      (current) => new Date(current.getFullYear(), current.getMonth() + offset, 1)
+      (current) =>
+        new Date(
+          Date.UTC(
+            current.getUTCFullYear(),
+            current.getUTCMonth() + offset,
+            1
+          )
+        )
     );
   };
 

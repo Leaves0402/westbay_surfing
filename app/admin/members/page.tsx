@@ -23,6 +23,7 @@ import {
   canManageMembers,
   canReviewPendingMembers,
   canReviewSurfLevelRequests,
+  canViewSurfLevelRequests,
   canViewMembers,
   compareRolesDescending,
   compareSurfLevelsDescending,
@@ -32,6 +33,7 @@ import {
   officialMemberRoleOptions,
   profileSelectColumns,
   roleLabels,
+  type AdminGovernance,
   type Profile,
   type PublicMemberProfile,
   type Role,
@@ -64,6 +66,8 @@ export default function MembersAdminPage() {
   const [surfTripCounts, setSurfTripCounts] = useState<Record<string, number>>(
     {}
   );
+  const [adminGovernance, setAdminGovernance] =
+    useState<AdminGovernance | null>(null);
   const [pendingMembers, setPendingMembers] = useState<Profile[]>([]);
   const [surfLevelRequests, setSurfLevelRequests] = useState<Profile[]>([]);
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(
@@ -86,7 +90,13 @@ export default function MembersAdminPage() {
   const canView = canViewMembers(profile);
   const canManage = canManageMembers(profile);
   const canReviewPending = canReviewPendingMembers(profile);
+  const canViewSurfLevels = canViewSurfLevelRequests(profile);
   const canReviewSurfLevels = canReviewSurfLevelRequests(profile);
+  const additionalAdminSlotsFull = Boolean(
+    adminGovernance &&
+      adminGovernance.additional_admin_count >=
+        adminGovernance.additional_admin_limit
+  );
 
   const sortedOfficialMembers = useMemo(
     () =>
@@ -132,8 +142,11 @@ export default function MembersAdminPage() {
 
   const canRemoveMember = useCallback(
     (member: PublicMemberProfile) =>
-      canManage && member.id !== user?.id && member.role !== "admin",
-    [canManage, user?.id]
+      canManage &&
+      member.id !== user?.id &&
+      member.id !== adminGovernance?.owner_user_id &&
+      member.role !== "admin",
+    [adminGovernance?.owner_user_id, canManage, user?.id]
   );
 
   const exitBatchRemoveMode = useCallback(() => {
@@ -146,11 +159,14 @@ export default function MembersAdminPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const [officialResult, tripCountsResult] = await Promise.all([
+    const [officialResult, tripCountsResult, governanceResult] = await Promise.all([
       supabase
         .from("public_member_profiles")
         .select("id, full_name, student_id, surf_level, role"),
       supabase.rpc("get_member_surf_trip_counts"),
+      canManage
+        ? supabase.rpc("get_admin_governance")
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (officialResult.error) {
@@ -165,6 +181,12 @@ export default function MembersAdminPage() {
       return;
     }
 
+    if (governanceResult.error) {
+      setIsLoadingMembers(false);
+      setStatusMessage(`讀取管理員規則失敗：${governanceResult.error.message}`);
+      return;
+    }
+
     setOfficialMembers((officialResult.data ?? []) as PublicMemberProfile[]);
     setSurfTripCounts(
       Object.fromEntries(
@@ -176,8 +198,28 @@ export default function MembersAdminPage() {
         ).map((item) => [item.user_id, Number(item.trip_count)])
       )
     );
+    const governanceRow = (governanceResult.data?.[0] ?? null) as
+      | {
+          owner_user_id: string;
+          additional_admin_count: number | string;
+          additional_admin_limit: number | string;
+        }
+      | null;
+    setAdminGovernance(
+      governanceRow
+        ? {
+            owner_user_id: governanceRow.owner_user_id,
+            additional_admin_count: Number(
+              governanceRow.additional_admin_count
+            ),
+            additional_admin_limit: Number(
+              governanceRow.additional_admin_limit
+            ),
+          }
+        : null
+    );
 
-    if (canReviewPending || canReviewSurfLevels) {
+    if (canReviewPending || canViewSurfLevels) {
       const [pendingResult, requestResult] = await Promise.all([
         canReviewPending
           ? supabase
@@ -186,7 +228,7 @@ export default function MembersAdminPage() {
               .eq("role", "pending")
               .order("created_at", { ascending: false })
           : Promise.resolve({ data: [], error: null }),
-        canReviewSurfLevels
+        canViewSurfLevels
           ? supabase
               .from("profiles")
               .select(profileSelectColumns)
@@ -216,7 +258,7 @@ export default function MembersAdminPage() {
 
     setSelectedPendingIds(new Set());
     setIsLoadingMembers(false);
-  }, [canReviewPending, canReviewSurfLevels, setStatusMessage]);
+  }, [canManage, canReviewPending, canViewSurfLevels, setStatusMessage]);
 
   useEffect(() => {
     if (!canView) return;
@@ -341,7 +383,7 @@ export default function MembersAdminPage() {
 
   const handleApproveSurfLevel = async (targetUserId: string) => {
     if (!canReviewSurfLevels) {
-      setStatusMessage("只有幹部與管理員可以審核衝浪程度。");
+      setStatusMessage("只有管理員可以審核衝浪程度。");
       return;
     }
 
@@ -360,13 +402,20 @@ export default function MembersAdminPage() {
       return;
     }
 
-    setStatusMessage("衝浪程度已核准。");
+    const request = surfLevelRequests.find(
+      (member) => member.id === targetUserId
+    );
+    setStatusMessage(
+      request?.requested_surf_level === "進階"
+        ? "進階程度已核准，該社員已自動晉升為管理員。"
+        : "衝浪程度已核准。"
+    );
     await loadMembers();
   };
 
   const handleRejectSurfLevel = async (targetUserId: string) => {
     if (!canReviewSurfLevels) {
-      setStatusMessage("只有幹部與管理員可以審核衝浪程度。");
+      setStatusMessage("只有管理員可以審核衝浪程度。");
       return;
     }
 
@@ -472,7 +521,7 @@ export default function MembersAdminPage() {
             <div>
               <h1 className="text-2xl font-bold text-text-primary">社員名單</h1>
               <p className="mt-1 text-sm text-text-secondary">
-                社員可瀏覽正式成員名單；幹部與管理員可審核待審核社員、調整身分與處理程度申請。
+                幹部可審核社員及處理一般社員身分；只有管理員可以管理管理員身分與審核程度。
               </p>
             </div>
           </div>
@@ -515,7 +564,14 @@ export default function MembersAdminPage() {
           <div className="grid gap-6">
             <Card>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-semibold text-text-primary">正式成員列表</h2>
+                <div>
+                  <h2 className="font-semibold text-text-primary">正式成員列表</h2>
+                  {profile?.role === "admin" && adminGovernance && (
+                    <p className="mt-1 text-xs text-text-secondary">
+                      額外管理員名額：{adminGovernance.additional_admin_count} / {adminGovernance.additional_admin_limit}（不含站主）
+                    </p>
+                  )}
+                </div>
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                   <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
                     <Search
@@ -644,6 +700,11 @@ export default function MembersAdminPage() {
                             )}
                             <td className="truncate px-2 py-2 font-medium text-text-primary md:px-3">
                               {member.full_name || "未填姓名"}
+                              {member.id === adminGovernance?.owner_user_id && (
+                                <span className="ml-1 text-[10px] font-medium text-primary md:text-xs">
+                                  站主
+                                </span>
+                              )}
                             </td>
                             <td className="truncate px-2 py-2 text-text-secondary md:px-3">
                               {member.student_id || "未填學號"}
@@ -658,6 +719,7 @@ export default function MembersAdminPage() {
                             </td>
                             <td className="px-2 py-2 md:px-3">
                               {canManage &&
+                              member.id !== adminGovernance?.owner_user_id &&
                               (profile?.role === "admin" ||
                                 member.role !== "admin") ? (
                                 <select
@@ -682,9 +744,21 @@ export default function MembersAdminPage() {
                                         role !== "admin"
                                     )
                                     .map((role) => (
-                                    <option key={role} value={role}>
-                                      {roleLabels[role]}
-                                    </option>
+                                      <option
+                                        key={role}
+                                        value={role}
+                                        disabled={
+                                          role === "admin" &&
+                                          member.role !== "admin" &&
+                                          Boolean(
+                                            adminGovernance &&
+                                              adminGovernance.additional_admin_count >=
+                                                adminGovernance.additional_admin_limit
+                                          )
+                                        }
+                                      >
+                                        {roleLabels[role]}
+                                      </option>
                                     ))}
                                 </select>
                               ) : (
@@ -849,12 +923,18 @@ export default function MembersAdminPage() {
               </Card>
             )}
 
-            {canReviewSurfLevels && (
+            {canViewSurfLevels && (
               <Card>
                 <div className="mb-4 flex items-center gap-2">
                   <Gauge size={18} className="text-primary" />
                   <h2 className="font-semibold text-text-primary">程度審核</h2>
                 </div>
+
+                {!canReviewSurfLevels && (
+                  <p className="mb-4 rounded-xl border border-warning/30 bg-warning-light px-3 py-2 text-sm text-text-primary">
+                    有社員送出程度申請；幹部可查看通知，只有管理員可以核准或拒絕。
+                  </p>
+                )}
 
                 {surfLevelRequests.length === 0 ? (
                   <p className="text-sm text-text-secondary">
@@ -894,34 +974,50 @@ export default function MembersAdminPage() {
                                 />
                               </td>
                               <td className="px-3 py-3">
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    className="!min-h-9 !px-2.5 !py-1 !text-xs text-success"
-                                    icon={<Check size={14} />}
-                                    onClick={() =>
-                                      void handleApproveSurfLevel(member.id)
-                                    }
-                                    disabled={
-                                      reviewingSurfLevelUserId === member.id
-                                    }
-                                  >
-                                    核准
-                                  </Button>
-                                  <Button
-                                    variant="danger"
-                                    className="!min-h-9 !px-2.5 !py-1 !text-xs"
-                                    icon={<X size={14} />}
-                                    onClick={() =>
-                                      void handleRejectSurfLevel(member.id)
-                                    }
-                                    disabled={
-                                      reviewingSurfLevelUserId === member.id
-                                    }
-                                  >
-                                    拒絕
-                                  </Button>
-                                </div>
+                                {canReviewSurfLevels ? (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      className="!min-h-9 !px-2.5 !py-1 !text-xs text-success"
+                                      icon={<Check size={14} />}
+                                      onClick={() =>
+                                        void handleApproveSurfLevel(member.id)
+                                      }
+                                      disabled={
+                                        reviewingSurfLevelUserId === member.id ||
+                                        (member.requested_surf_level === "進階" &&
+                                          member.role !== "admin" &&
+                                          additionalAdminSlotsFull)
+                                      }
+                                      title={
+                                        member.requested_surf_level === "進階" &&
+                                        member.role !== "admin" &&
+                                        additionalAdminSlotsFull
+                                          ? "額外管理員名額已滿，需先移除一位管理員"
+                                          : "核准程度申請"
+                                      }
+                                    >
+                                      核准
+                                    </Button>
+                                    <Button
+                                      variant="danger"
+                                      className="!min-h-9 !px-2.5 !py-1 !text-xs"
+                                      icon={<X size={14} />}
+                                      onClick={() =>
+                                        void handleRejectSurfLevel(member.id)
+                                      }
+                                      disabled={
+                                        reviewingSurfLevelUserId === member.id
+                                      }
+                                    >
+                                      拒絕
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-text-secondary">
+                                    等待管理員處理
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -947,27 +1043,45 @@ export default function MembersAdminPage() {
                             <span>申請：</span>
                             <SurfLevelBadge level={member.requested_surf_level} />
                           </div>
-                          <div className="mt-3 flex gap-2 border-t border-line pt-3">
-                            <Button
-                              variant="outline"
-                              fullWidth
-                              className="text-success"
-                              icon={<Check size={16} />}
+                          {canReviewSurfLevels ? (
+                            <div className="mt-3 flex gap-2 border-t border-line pt-3">
+                              <Button
+                                variant="outline"
+                                fullWidth
+                                className="text-success"
+                                icon={<Check size={16} />}
                               onClick={() => void handleApproveSurfLevel(member.id)}
-                              disabled={reviewingSurfLevelUserId === member.id}
-                            >
-                              核准
-                            </Button>
-                            <Button
-                              variant="danger"
-                              fullWidth
-                              icon={<X size={16} />}
-                              onClick={() => void handleRejectSurfLevel(member.id)}
-                              disabled={reviewingSurfLevelUserId === member.id}
-                            >
-                              拒絕
-                            </Button>
-                          </div>
+                              disabled={
+                                reviewingSurfLevelUserId === member.id ||
+                                (member.requested_surf_level === "進階" &&
+                                  member.role !== "admin" &&
+                                  additionalAdminSlotsFull)
+                              }
+                              title={
+                                member.requested_surf_level === "進階" &&
+                                member.role !== "admin" &&
+                                additionalAdminSlotsFull
+                                  ? "額外管理員名額已滿，需先移除一位管理員"
+                                  : "核准程度申請"
+                              }
+                              >
+                                核准
+                              </Button>
+                              <Button
+                                variant="danger"
+                                fullWidth
+                                icon={<X size={16} />}
+                                onClick={() => void handleRejectSurfLevel(member.id)}
+                                disabled={reviewingSurfLevelUserId === member.id}
+                              >
+                                拒絕
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className="mt-3 border-t border-line pt-3 text-xs text-text-secondary">
+                              等待管理員處理
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>

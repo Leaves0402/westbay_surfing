@@ -101,8 +101,12 @@ export function canReviewPendingMembers(input: RoleInput) {
   return canManageMembers(input);
 }
 
-export function canReviewSurfLevelRequests(input: RoleInput) {
+export function canViewSurfLevelRequests(input: RoleInput) {
   return canManageMembers(input);
+}
+
+export function canReviewSurfLevelRequests(input: RoleInput) {
+  return hasAtLeastRole(input, "admin");
 }
 
 export function canViewSurfTrips(input: RoleInput) {

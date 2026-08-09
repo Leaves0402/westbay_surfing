@@ -1,7 +1,5 @@
 import type { RentalSlot } from "@/lib/types";
-
-/** 台灣（Asia/Taipei）固定為 UTC+8，沒有日光節約時間。 */
-const TAIPEI_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+import { getTaipeiDate } from "@/lib/taipeiTime";
 
 type RentalSlotSchedule = Pick<RentalSlot, "rental_date" | "start_time">;
 
@@ -11,7 +9,7 @@ export function formatRentalTime(timeString: string) {
 
 /** 以台灣時間取得今天的日期字串（YYYY-MM-DD）。 */
 export function getTaipeiTodayDate(nowMs: number = Date.now()) {
-  return new Date(nowMs + TAIPEI_UTC_OFFSET_MS).toISOString().slice(0, 10);
+  return getTaipeiDate(0, nowMs);
 }
 
 /**
@@ -49,18 +47,19 @@ export function isRentalSlotStartInFuture(
 export const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
 
 export function parseLocalDate(dateString: string) {
-  return new Date(`${dateString}T00:00:00`);
+  return new Date(`${dateString}T00:00:00Z`);
 }
 
 export function toDateString(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
 export function formatRentalDate(dateString: string) {
   return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+    timeZone: "UTC",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -70,6 +69,7 @@ export function formatRentalDate(dateString: string) {
 
 export function formatRentalShortDate(dateString: string) {
   return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+    timeZone: "UTC",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -78,26 +78,27 @@ export function formatRentalShortDate(dateString: string) {
 
 export function formatRentalMonth(date: Date) {
   return date.toLocaleDateString("zh-TW", {
+    timeZone: "UTC",
     year: "numeric",
     month: "long",
   });
 }
 
 export function getCalendarCells(monthCursor: Date) {
-  const year = monthCursor.getFullYear();
-  const month = monthCursor.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const firstWeekday = (firstDay.getDay() + 6) % 7;
-  const startDate = new Date(year, month, 1 - firstWeekday);
+  const year = monthCursor.getUTCFullYear();
+  const month = monthCursor.getUTCMonth();
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const firstWeekday = (firstDay.getUTCDay() + 6) % 7;
+  const startDate = new Date(Date.UTC(year, month, 1 - firstWeekday));
 
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(startDate);
-    date.setDate(startDate.getDate() + index);
+    date.setUTCDate(startDate.getUTCDate() + index);
 
     return {
       date,
       dateString: toDateString(date),
-      isCurrentMonth: date.getMonth() === month,
+      isCurrentMonth: date.getUTCMonth() === month,
     };
   });
 }

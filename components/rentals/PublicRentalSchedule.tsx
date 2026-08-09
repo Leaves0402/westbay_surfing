@@ -26,6 +26,7 @@ import {
   getTaipeiTodayDate,
   isRentalSlotExpired,
   parseLocalDate,
+  toDateString,
   weekdayLabels,
 } from "@/lib/rentalSlots";
 import { createClient } from "@/lib/supabase/client";
@@ -71,18 +72,42 @@ export function PublicRentalSchedule({
     setErrorMessage("");
 
     const supabase = createClient();
-    const { data, error } = await supabase.rpc("get_public_rental_schedule");
+    const cells = getCalendarCells(monthCursor);
+    const firstCell = cells[0];
+    const lastCell = cells[cells.length - 1];
+    let { data, error } = await supabase.rpc(
+      "get_public_rental_schedule_range",
+      {
+        target_start_date: firstCell
+          ? toDateString(firstCell.date)
+          : getTaipeiTodayDate(),
+        target_end_date: lastCell
+          ? toDateString(lastCell.date)
+          : getTaipeiTodayDate(),
+      }
+    );
+
+    // During a staggered rollout, keep the public page usable until the new
+    // range RPC migration reaches Supabase.
+    if (
+      error &&
+      (error.code === "PGRST202" ||
+        error.message.includes("get_public_rental_schedule_range"))
+    ) {
+      const fallbackResult = await supabase.rpc("get_public_rental_schedule");
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     setIsLoading(false);
 
     if (error) {
-      setSlots([]);
       setErrorMessage(`讀取公開租板時段失敗：${error.message}`);
       return;
     }
 
     setSlots((data ?? []) as PublicRentalSlot[]);
-  }, []);
+  }, [monthCursor]);
 
   useEffect(() => {
     queueMicrotask(() => void loadSchedule());
@@ -110,7 +135,13 @@ export function PublicRentalSchedule({
   const moveMonth = (offset: number) => {
     setMonthCursor(
       (current) =>
-        new Date(current.getFullYear(), current.getMonth() + offset, 1)
+        new Date(
+          Date.UTC(
+            current.getUTCFullYear(),
+            current.getUTCMonth() + offset,
+            1
+          )
+        )
     );
   };
 
