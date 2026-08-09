@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { SiteImage } from "@/lib/siteContent";
+import { toObjectPosition, type HomepageImage } from "@/lib/homepage";
 
 const AUTOPLAY_INTERVAL_MS = 7000;
 const SWIPE_THRESHOLD_PX = 48;
@@ -12,7 +12,7 @@ export function HeroCarousel({
   slides,
   children,
 }: {
-  slides: SiteImage[];
+  slides: HomepageImage[];
   /** 疊在照片上的 Hero 文字與操作按鈕。 */
   children: React.ReactNode;
 }) {
@@ -101,11 +101,11 @@ export function HeroCarousel({
     >
       {slides.map((slide, index) => {
         const isActive = index === activeIndex;
-        const hasFailed = failedSources[slide.src];
+        const hasFailed = failedSources[slide.url];
 
         return (
           <div
-            key={slide.src}
+            key={`${slide.url}-${index}`}
             aria-hidden={!isActive}
             className={`absolute inset-0 ${
               prefersReducedMotion ? "" : "transition-opacity duration-700"
@@ -118,17 +118,18 @@ export function HeroCarousel({
               <div className="h-full w-full bg-primary-hover" />
             ) : (
               <Image
-                src={slide.src}
+                src={slide.url}
                 alt={slide.alt}
                 fill
                 priority={index === 0}
+                unoptimized
                 sizes="100vw"
                 className="object-cover"
-                style={{ objectPosition: slide.objectPosition }}
+                style={{ objectPosition: toObjectPosition(slide) }}
                 onError={() =>
                   setFailedSources((current) => ({
                     ...current,
-                    [slide.src]: true,
+                    [slide.url]: true,
                   }))
                 }
               />
@@ -177,7 +178,7 @@ export function HeroCarousel({
           <div className="absolute inset-x-0 bottom-5 z-20 flex items-center justify-center gap-2.5">
             {slides.map((slide, index) => (
               <button
-                key={slide.src}
+                key={`${slide.url}-dot-${index}`}
                 type="button"
                 aria-label={`切換到第 ${index + 1} 張照片`}
                 aria-current={index === activeIndex}
