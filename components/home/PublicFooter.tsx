@@ -1,89 +1,174 @@
-import { AtSign, Mail, MapPin, MessageCircle, QrCode } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import { AtSign, ImageOff, Mail } from "lucide-react";
+import { SectionEditButton } from "@/components/home/editor/SectionEditButton";
 import {
-  contactPendingText,
-  footerContact,
-  footerImage,
-} from "@/lib/siteContent";
+  getAdminContactHref,
+  getInstagramHandle,
+  toObjectPosition,
+  type HomepageContent,
+  type HomepageImage,
+} from "@/lib/homepage";
 
-// 這個 lucide 版本沒有品牌圖示，改用語意相近的通用圖示。
-const contactIcons = [Mail, AtSign, MessageCircle, MapPin];
+/**
+ * 深色海浪照片 Footer。
+ * 沒有填寫的聯絡欄位會直接不顯示，不會出現「待補」字樣。
+ */
+export function PublicFooter({
+  content,
+  backgroundImage,
+  qrCodeImage,
+  isEditing = false,
+  onEdit,
+}: {
+  content: HomepageContent;
+  backgroundImage: HomepageImage | null;
+  qrCodeImage: HomepageImage | null;
+  isEditing?: boolean;
+  onEdit?: () => void;
+}) {
+  const instagramHandle = getInstagramHandle(content.footerInstagramUrl);
+  const adminContactHref = getAdminContactHref(content.footerAdminContact);
+  const hasContactInfo =
+    Boolean(content.footerInstagramUrl) || Boolean(content.footerAdminContact);
 
-/** 深色海浪照片 Footer。聯絡資料尚未提供時只顯示待補文字，不做成假連結。 */
-export function PublicFooter() {
   return (
     <footer className="relative isolate overflow-hidden bg-slate-900 text-white">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-cover bg-center opacity-45"
-        style={{
-          backgroundImage: `url("${footerImage.src}")`,
-          backgroundPosition: footerImage.objectPosition,
-        }}
-      />
+      {backgroundImage && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-cover opacity-45"
+          style={{
+            backgroundImage: `url("${backgroundImage.url}")`,
+            backgroundPosition: toObjectPosition(backgroundImage),
+          }}
+        />
+      )}
       <div aria-hidden="true" className="absolute inset-0 bg-slate-950/70" />
 
       <div className="relative mx-auto max-w-6xl px-4 py-14 sm:px-6">
+        {isEditing && onEdit && (
+          <div className="mb-6 flex">
+            <SectionEditButton
+              label="編輯 Footer"
+              tone="dark"
+              onClick={onEdit}
+            />
+          </div>
+        )}
+
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
           <div>
             <h2 className="text-lg font-bold tracking-tight">
-              {footerContact.clubName}
+              {content.footerClubName}
             </h2>
-            <p className="mt-3 max-w-sm text-sm leading-7 text-white/70">
-              {footerContact.description}
-            </p>
+            {content.footerDescription && (
+              <p className="mt-3 max-w-sm text-sm leading-7 text-white/70">
+                {content.footerDescription}
+              </p>
+            )}
           </div>
 
-          <div>
-            <h3 className="text-sm font-semibold text-white/90">聯絡我們</h3>
-            <ul className="mt-3 flex flex-col gap-3 text-sm">
-              {footerContact.items.map((item, index) => {
-                const Icon = contactIcons[index] ?? Mail;
-
-                return (
-                  <li key={item.label} className="flex items-start gap-2.5">
-                    <Icon
+          {hasContactInfo && (
+            <div>
+              <h3 className="text-sm font-semibold text-white/90">聯絡我們</h3>
+              <ul className="mt-3 flex flex-col gap-3 text-sm">
+                {content.footerInstagramUrl && (
+                  <li className="flex items-start gap-2.5">
+                    <AtSign
                       size={16}
                       strokeWidth={1.75}
                       className="mt-0.5 shrink-0 text-white/60"
                     />
                     <span className="min-w-0">
                       <span className="block text-xs text-white/55">
-                        {item.label}
+                        Instagram
                       </span>
-                      {item.value && item.href ? (
+                      <a
+                        href={content.footerInstagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block break-words text-white underline decoration-white/40 underline-offset-4 hover:decoration-white"
+                      >
+                        {instagramHandle}
+                      </a>
+                    </span>
+                  </li>
+                )}
+
+                {content.footerAdminContact && (
+                  <li className="flex items-start gap-2.5">
+                    <Mail
+                      size={16}
+                      strokeWidth={1.75}
+                      className="mt-0.5 shrink-0 text-white/60"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-xs text-white/55">
+                        聯絡網站管理員
+                      </span>
+                      {adminContactHref ? (
                         <a
-                          href={item.href}
+                          href={adminContactHref}
                           className="block break-words text-white underline decoration-white/40 underline-offset-4 hover:decoration-white"
                         >
-                          {item.value}
+                          {content.footerAdminContact}
                         </a>
                       ) : (
-                        <span className="block text-white/70">
-                          {item.value ?? contactPendingText}
+                        <span className="block break-words text-white/80">
+                          {content.footerAdminContact}
                         </span>
                       )}
                     </span>
                   </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          <div className="lg:justify-self-end">
-            <h3 className="text-sm font-semibold text-white/90">社團 QR Code</h3>
-            <div className="mt-3 flex h-32 w-32 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/35 bg-white/5 text-white/60">
-              <QrCode size={30} strokeWidth={1.5} />
-              <span className="text-[11px]">{footerContact.qrCodeNote}</span>
+                )}
+              </ul>
             </div>
-          </div>
+          )}
+
+          {qrCodeImage && (
+            <div className="lg:justify-self-end">
+              <h3 className="text-sm font-semibold text-white/90">
+                社團 QR Code
+              </h3>
+              <QrCodeImage image={qrCodeImage} />
+            </div>
+          )}
         </div>
 
         <div className="mt-12 border-t border-white/15 pt-5">
           <p className="text-xs text-white/50">
-            © {new Date().getFullYear()} {footerContact.clubName}．社團內部網站
+            © {new Date().getFullYear()} {content.footerClubName}．社團內部網站
           </p>
         </div>
       </div>
     </footer>
+  );
+}
+
+function QrCodeImage({ image }: { image: HomepageImage }) {
+  const [hasFailed, setHasFailed] = useState(false);
+
+  return (
+    <div className="relative mt-3 h-32 w-32 overflow-hidden rounded-2xl border border-white/25 bg-white/10">
+      {hasFailed ? (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-white/60">
+          <ImageOff size={22} strokeWidth={1.5} />
+          <span className="text-[11px]">圖片載入失敗</span>
+        </div>
+      ) : (
+        <Image
+          src={image.url}
+          alt={image.alt || "社團 QR Code"}
+          fill
+          unoptimized
+          sizes="128px"
+          className="object-cover"
+          onError={() => setHasFailed(true)}
+        />
+      )}
+    </div>
   );
 }

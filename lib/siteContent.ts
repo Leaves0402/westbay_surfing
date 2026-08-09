@@ -1,9 +1,16 @@
 /**
- * 首頁公開內容集中管理。
+ * 首頁的預設內容（fallback）。
  *
- * 圖片目前是存放在 public/images/home 的本機暫代照片。
- * 等社團正式照片準備好後，可直接以相同檔名覆蓋，或修改這裡的
- * src / alt / objectPosition，不需要改動任何元件。
+ * 正式內容現在由幹部與管理員直接在首頁編輯，存放在 Supabase
+ * （homepage_content / homepage_media / homepage_officers 與 homepage-images bucket）。
+ *
+ * 這個檔案只在下列情況使用：
+ * - docs/sql/add_homepage_management.sql 還沒執行
+ * - 讀取 Supabase 失敗
+ * - 資料庫裡還沒有對應的圖片
+ *
+ * 有 fallback 才不會讓首頁在上述情況下白屏，所以請保留這些預設值與
+ * public/images/home 內的圖片。
  */
 
 export type SiteImage = {

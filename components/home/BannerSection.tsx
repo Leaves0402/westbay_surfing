@@ -1,29 +1,58 @@
-import { bannerSection } from "@/lib/siteContent";
+import { SectionEditButton } from "@/components/home/editor/SectionEditButton";
+import { toObjectPosition, type HomepageImage } from "@/lib/homepage";
 
 /**
  * 全寬固定背景照片區段。
  * 桌機使用 bg-fixed 製造輕微 parallax；手機改為一般靜態背景，避免 iOS 跳動。
  */
-export function BannerSection() {
+export function BannerSection({
+  image,
+  slogan,
+  subtitle,
+  isEditing = false,
+  onEdit,
+}: {
+  image: HomepageImage | null;
+  slogan: string;
+  subtitle: string;
+  isEditing?: boolean;
+  onEdit?: () => void;
+}) {
   return (
     <section className="relative isolate overflow-hidden">
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-slate-800 bg-cover bg-center bg-scroll md:bg-fixed"
-        style={{
-          backgroundImage: `url("${bannerSection.image.src}")`,
-          backgroundPosition: bannerSection.image.objectPosition,
-        }}
+        className="absolute inset-0 bg-slate-800 bg-cover bg-scroll md:bg-fixed"
+        style={
+          image
+            ? {
+                backgroundImage: `url("${image.url}")`,
+                backgroundPosition: toObjectPosition(image),
+              }
+            : undefined
+        }
       />
       <div aria-hidden="true" className="absolute inset-0 bg-black/50" />
 
       <div className="relative mx-auto flex min-h-[260px] max-w-6xl flex-col justify-center px-4 py-16 sm:min-h-[320px] sm:px-6">
+        {isEditing && onEdit && (
+          <div className="mb-4 flex">
+            <SectionEditButton
+              label="編輯中段區塊"
+              tone="dark"
+              onClick={onEdit}
+            />
+          </div>
+        )}
+
         <p className="text-xl font-bold leading-snug text-white sm:text-3xl">
-          {bannerSection.slogan}
+          {slogan}
         </p>
-        <p className="mt-3 max-w-xl text-sm leading-7 text-white/85 sm:text-base">
-          {bannerSection.subtitle}
-        </p>
+        {subtitle && (
+          <p className="mt-3 max-w-xl text-sm leading-7 text-white/85 sm:text-base">
+            {subtitle}
+          </p>
+        )}
       </div>
     </section>
   );
