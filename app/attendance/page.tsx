@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { fieldControlClasses } from "@/components/ui/FormField";
-import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import {
   compareSurfLevelsDescending,
   canViewAttendancePage,
@@ -327,7 +326,7 @@ export default function AttendancePage() {
   };
 
   return (
-    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
+    <main className="min-h-screen bg-appBg text-text-primary">
       <Navbar
         user={user}
         profile={profile}
@@ -631,8 +630,6 @@ export default function AttendancePage() {
           </Card>
         )}
       </div>
-
-      <MobileTabBar />
     </main>
   );
 }

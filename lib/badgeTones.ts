@@ -24,3 +24,13 @@ export const roleBadgeToneMap: Record<Role, BadgeTone> = {
 export function getRoleTone(role: Role): BadgeTone {
   return roleBadgeToneMap[role] ?? "neutral";
 }
+
+/** 小圓點用的底色，讓日曆等地方可以沿用同一套色調。 */
+export const toneDotClasses: Record<BadgeTone, string> = {
+  primary: "bg-primary",
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-danger",
+  info: "bg-info",
+  neutral: "bg-slate-300",
+};

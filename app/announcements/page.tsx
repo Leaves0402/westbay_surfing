@@ -16,7 +16,6 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
-import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import {
   canManageAnnouncements,
   canViewAnnouncements,
@@ -231,7 +230,7 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
+    <main className="min-h-screen bg-appBg text-text-primary">
       <Navbar
         user={user}
         profile={profile}
@@ -487,8 +486,6 @@ export default function AnnouncementsPage() {
           </Card>
         )}
       </div>
-
-      <MobileTabBar />
     </main>
   );
 }

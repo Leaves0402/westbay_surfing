@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { resolveSafeNextPath } from "@/lib/authRedirect";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
 import { profileSelectColumns } from "@/lib/types";
@@ -127,18 +128,28 @@ export function useAuthProfile() {
     };
   }, [loadOrCreateProfile]);
 
-  const handleGoogleLogin = useCallback(async () => {
+  /**
+   * 登入後要返回的頁面。預設回到目前頁面，
+   * 也可以指定原本想前往但被導回首頁的路徑。
+   */
+  const handleGoogleLogin = useCallback(async (nextPath?: string) => {
     const supabase = createClient();
-    const currentPath = `${window.location.pathname}${window.location.search}`;
 
-    await supabase.auth.signInWithOAuth({
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    const requestedPath = resolveSafeNextPath(nextPath ?? currentPath);
+
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-          currentPath
+          requestedPath
         )}`,
       },
     });
+
+    if (error) {
+      setStatusMessage(`Google 登入失敗：${error.message}`);
+    }
   }, []);
 
   const handleLogout = useCallback(async () => {

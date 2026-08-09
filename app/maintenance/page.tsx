@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Card } from "@/components/ui/Card";
-import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { canViewMaintenancePage } from "@/lib/permissions";
 import { useAuthProfile } from "@/lib/useAuthProfile";
 
@@ -29,7 +28,7 @@ export default function MaintenancePage() {
   const canView = canViewMaintenancePage(profile);
 
   return (
-    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
+    <main className="min-h-screen bg-appBg text-text-primary">
       <Navbar
         user={user}
         profile={profile}
@@ -209,8 +208,6 @@ export default function MaintenancePage() {
           </Card>
         )}
       </div>
-
-      <MobileTabBar />
     </main>
   );
 }

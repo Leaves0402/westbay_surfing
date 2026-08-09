@@ -22,7 +22,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
-import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { getRoleTone } from "@/lib/badgeTones";
 import {
@@ -720,7 +719,7 @@ export default function TripsPage() {
   const chatTrip = trips.find((trip) => trip.id === chatTripId) ?? null;
 
   return (
-    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
+    <main className="min-h-screen bg-appBg text-text-primary">
       <Navbar
         user={user}
         profile={profile}
@@ -1242,8 +1241,6 @@ export default function TripsPage() {
           onError={setStatusMessage}
         />
       )}
-
-      <MobileTabBar />
     </main>
   );
 }
