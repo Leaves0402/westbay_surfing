@@ -45,3 +45,59 @@ export function isRentalSlotStartInFuture(
   if (Number.isNaN(startTimestamp)) return false;
   return startTimestamp > nowMs;
 }
+
+export const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
+
+export function parseLocalDate(dateString: string) {
+  return new Date(`${dateString}T00:00:00`);
+}
+
+export function toDateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function formatRentalDate(dateString: string) {
+  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  });
+}
+
+export function formatRentalShortDate(dateString: string) {
+  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+export function formatRentalMonth(date: Date) {
+  return date.toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "long",
+  });
+}
+
+export function getCalendarCells(monthCursor: Date) {
+  const year = monthCursor.getFullYear();
+  const month = monthCursor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const firstWeekday = (firstDay.getDay() + 6) % 7;
+  const startDate = new Date(year, month, 1 - firstWeekday);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+
+    return {
+      date,
+      dateString: toDateString(date),
+      isCurrentMonth: date.getMonth() === month,
+    };
+  });
+}

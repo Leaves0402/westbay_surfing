@@ -9,7 +9,6 @@ import {
   Clock,
   Gauge,
   Info,
-  Lock,
   Plus,
   Power,
   RefreshCw,
@@ -19,15 +18,16 @@ import {
   X,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { LoginPromptDialog } from "@/components/auth/LoginPromptDialog";
+import { PublicRentalSchedule } from "@/components/rentals/PublicRentalSchedule";
 import { SurfboardManager } from "@/components/rentals/SurfboardManager";
 import { SurfboardPicker } from "@/components/rentals/SurfboardPicker";
 import { SurfboardThumbnail } from "@/components/rentals/SurfboardThumbnail";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
-import { MobileTabBar } from "@/components/ui/MobileTabBar";
-import { getRoleTone, getSurfLevelTone } from "@/lib/badgeTones";
+import { getRoleTone, getSurfLevelTone, toneDotClasses } from "@/lib/badgeTones";
 import {
   canBrowseSurfboards,
   canManageRentalSlots,
@@ -38,10 +38,16 @@ import {
   userMeetsSurfLevel,
 } from "@/lib/permissions";
 import {
+  formatRentalDate as formatDate,
+  formatRentalMonth as formatMonth,
+  formatRentalShortDate as formatShortDate,
   formatRentalTime as formatTime,
+  getCalendarCells,
   getTaipeiTodayDate,
   isRentalSlotExpired,
   isRentalSlotStartInFuture,
+  parseLocalDate,
+  weekdayLabels,
 } from "@/lib/rentalSlots";
 import {
   createSignedSurfboardImageUrls,
@@ -62,75 +68,10 @@ import { useAuthProfile } from "@/lib/useAuthProfile";
 /** 畫面每 30 秒重新評估過期狀態，跨過開始時間時不需重新整理。 */
 const EXPIRATION_TICK_MS = 30_000;
 
-const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
-
-const toneDotClasses: Record<BadgeTone, string> = {
-  primary: "bg-primary",
-  success: "bg-success",
-  warning: "bg-warning",
-  danger: "bg-danger",
-  info: "bg-info",
-  neutral: "bg-slate-300",
-};
-
 type ResponsibleProfile = Pick<
   Profile,
   "id" | "email" | "full_name" | "student_id" | "surf_level" | "role"
 >;
-
-function parseLocalDate(dateString: string) {
-  return new Date(`${dateString}T00:00:00`);
-}
-
-function toDateString(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatDate(dateString: string) {
-  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-  });
-}
-
-function formatMonth(date: Date) {
-  return date.toLocaleDateString("zh-TW", {
-    year: "numeric",
-    month: "long",
-  });
-}
-
-function formatShortDate(dateString: string) {
-  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
-
-function getCalendarCells(monthCursor: Date) {
-  const year = monthCursor.getFullYear();
-  const month = monthCursor.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const firstWeekday = (firstDay.getDay() + 6) % 7;
-  const startDate = new Date(year, month, 1 - firstWeekday);
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + index);
-
-    return {
-      date,
-      dateString: toDateString(date),
-      isCurrentMonth: date.getMonth() === month,
-    };
-  });
-}
 
 function SurfLevelPill({ level }: { level: string | null | undefined }) {
   if (!level) {
@@ -199,6 +140,7 @@ export default function RentalsPage() {
   const [isLoadingSurfboards, setIsLoadingSurfboards] = useState(false);
   const [surfboardLoadError, setSurfboardLoadError] = useState("");
   const [pickerSlotId, setPickerSlotId] = useState<string | null>(null);
+  const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const [monthCursor, setMonthCursor] = useState(() =>
     parseLocalDate(getTaipeiTodayDate())
   );
@@ -837,7 +779,7 @@ export default function RentalsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-bg pb-24 text-slate-950 md:pb-10">
+    <main className="min-h-screen bg-bg text-slate-950">
       <Navbar
         user={user}
         profile={profile}
@@ -857,7 +799,7 @@ export default function RentalsPage() {
                 租板
               </h1>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                社員以上可以查看與登記；板務、幹部與管理員可以新增、開關、刪除時段並管理繳費狀態。
+                未登入可以查看公開時段與名額；社員以上可以登記；板務、幹部與管理員可以新增、開關、刪除時段並管理繳費狀態。
               </p>
             </div>
           </div>
@@ -869,33 +811,15 @@ export default function RentalsPage() {
             正在讀取登入狀態...
           </Card>
         ) : !user ? (
-          <Card>
-            <div className="flex items-start gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                <Lock size={18} strokeWidth={1.75} />
-              </span>
-              <div>
-                <h2 className="font-semibold text-slate-900">尚未登入</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-500">
-                  請先登入後再查看租板資訊。
-                </p>
-              </div>
-            </div>
-          </Card>
+          <PublicRentalSchedule
+            mode="guest"
+            onRequireLogin={() => setIsLoginPromptOpen(true)}
+          />
         ) : !canView ? (
-          <Card className="border-warning/30 bg-warning-light">
-            <div className="flex items-start gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning">
-                <Lock size={18} strokeWidth={1.75} />
-              </span>
-              <div>
-                <h2 className="font-semibold text-slate-900">尚未開通租板權限</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-700">
-                  目前身份只能登入與填寫資料，請等待幹部或管理員審核。
-                </p>
-              </div>
-            </div>
-          </Card>
+          <PublicRentalSchedule
+            mode="pending"
+            onRequireLogin={() => setIsLoginPromptOpen(true)}
+          />
         ) : (
           <>
             {canManageSlots && (
@@ -1257,7 +1181,16 @@ export default function RentalsPage() {
         />
       )}
 
-      <MobileTabBar />
+      {isLoginPromptOpen && (
+        <LoginPromptDialog
+          description="登記租板需要社員身分。登入後會自動建立社員資料，經幹部審核後即可登記並挑選衝浪板。"
+          onLogin={() => {
+            setIsLoginPromptOpen(false);
+            void handleGoogleLogin("/rentals");
+          }}
+          onClose={() => setIsLoginPromptOpen(false)}
+        />
+      )}
     </main>
   );
 }
