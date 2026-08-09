@@ -1,9 +1,9 @@
 /**
  * 首頁公開內容集中管理。
  *
- * 圖片目前全部是 Unsplash 的暫代照片（TEMPORARY PLACEHOLDER），
- * 等社團正式照片準備好後，只要替換這個檔案裡的 src / alt / objectPosition 即可，
- * 不需要改動任何元件。
+ * 圖片目前是存放在 public/images/home 的本機暫代照片。
+ * 等社團正式照片準備好後，可直接以相同檔名覆蓋，或修改這裡的
+ * src / alt / objectPosition，不需要改動任何元件。
  */
 
 export type SiteImage = {
@@ -19,22 +19,22 @@ export type SiteImage = {
  */
 export const heroSlides: SiteImage[] = [
   {
-    src: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&w=2000&q=70",
+    src: "/images/home/hero/hero-01.webp",
     alt: "衝浪者在藍綠色浪管中滑行（暫代照片）",
     objectPosition: "60% 50%",
   },
   {
-    src: "https://images.unsplash.com/photo-1455729552865-3658a5d39692?auto=format&fit=crop&w=2000&q=70",
+    src: "/images/home/hero/hero-02.webp",
     alt: "衝浪者沿著浪壁斜跑（暫代照片）",
     objectPosition: "62% 50%",
   },
   {
-    src: "https://images.unsplash.com/photo-1509914398892-963f53e6e2f1?auto=format&fit=crop&w=2000&q=70",
+    src: "/images/home/hero/hero-03.webp",
     alt: "夕陽下坐在浪板上等浪的衝浪者剪影（暫代照片）",
     objectPosition: "55% 45%",
   },
   {
-    src: "https://images.unsplash.com/photo-1531722569936-825d3dd91b15?auto=format&fit=crop&w=2000&q=70",
+    src: "/images/home/hero/hero-04.webp",
     alt: "黃色長板立在海灘上，背景是海浪（暫代照片）",
     objectPosition: "50% 55%",
   },
@@ -49,7 +49,7 @@ export const bannerSection: {
   subtitle: string;
 } = {
   image: {
-    src: "https://images.unsplash.com/photo-1483168527879-c66136b56105?auto=format&fit=crop&w=2000&q=70",
+    src: "/images/home/banner.webp",
     alt: "夕陽下的椰子樹與海平面（暫代照片）",
     objectPosition: "50% 50%",
   },
@@ -67,7 +67,7 @@ export type Officer = {
 
 /**
  * TEMPORARY PLACEHOLDER：幹部團隊。
- * 姓名與介紹皆為暫代文字，照片為 Unsplash 衝浪照，請替換為幹部本人照片。
+ * 姓名與介紹皆為暫代文字，照片為本機暫代衝浪照，請替換為幹部本人照片。
  */
 export const officers: Officer[] = [
   {
@@ -75,7 +75,7 @@ export const officers: Officer[] = [
     role: "社長",
     bio: "負責社團整體運作、對外聯絡與活動規劃。",
     image: {
-      src: "https://images.unsplash.com/photo-1505459668311-8dfac7952bf0?auto=format&fit=crop&w=800&q=70",
+      src: "/images/home/officers/president.webp",
       alt: "衝浪者在浪上轉向的黑白照片（幹部照片暫代）",
       objectPosition: "50% 40%",
     },
@@ -85,7 +85,7 @@ export const officers: Officer[] = [
     role: "副社長",
     bio: "協助社務推動，統籌社課與社員事務。",
     image: {
-      src: "https://images.unsplash.com/photo-1530870110042-98b2cb110834?auto=format&fit=crop&w=800&q=70",
+      src: "/images/home/officers/vice-president.webp",
       alt: "衝浪者在白色浪花中做出動作（幹部照片暫代）",
       objectPosition: "50% 45%",
     },
@@ -95,7 +95,7 @@ export const officers: Officer[] = [
     role: "板務",
     bio: "管理社上衝浪板、租板時段與器材維護。",
     image: {
-      src: "https://images.unsplash.com/photo-1459745930869-b3d0d72c3cbb?auto=format&fit=crop&w=800&q=70",
+      src: "/images/home/officers/board-manager.webp",
       alt: "從水中拍攝的浪管與衝浪者（幹部照片暫代）",
       objectPosition: "45% 50%",
     },
@@ -105,9 +105,9 @@ export const officers: Officer[] = [
     role: "活動",
     bio: "規劃揪外衝、社遊與各項社團活動。",
     image: {
-      src: "https://images.unsplash.com/photo-1770163821728-eeaa67e4b9f3?auto=format&fit=crop&w=800&q=70",
-      alt: "夕陽下的海岸線與海上的衝浪者（幹部照片暫代）",
-      objectPosition: "50% 50%",
+      src: "/images/home/officers/activity-manager.webp",
+      alt: "黃色長板立在海灘上的照片（幹部照片暫代）",
+      objectPosition: "50% 55%",
     },
   },
 ];
@@ -116,8 +116,8 @@ export const officers: Officer[] = [
  * TEMPORARY PLACEHOLDER：Footer 深色海浪背景照片。
  */
 export const footerImage: SiteImage = {
-  src: "https://images.unsplash.com/photo-1767833677852-95395b2d627b?auto=format&fit=crop&w=2000&q=70",
-  alt: "傍晚的海岸與海浪（暫代照片）",
+  src: "/images/home/footer.webp",
+  alt: "夕陽下的椰子樹與海平面（暫代照片）",
   objectPosition: "50% 50%",
 };
 

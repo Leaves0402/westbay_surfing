@@ -15,7 +15,10 @@ export function PublicFooter() {
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-cover bg-center opacity-45"
-        style={{ backgroundImage: `url("${footerImage.src}")` }}
+        style={{
+          backgroundImage: `url("${footerImage.src}")`,
+          backgroundPosition: footerImage.objectPosition,
+        }}
       />
       <div aria-hidden="true" className="absolute inset-0 bg-slate-950/70" />
 

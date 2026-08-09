@@ -10,7 +10,10 @@ export function BannerSection() {
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-slate-800 bg-cover bg-center bg-scroll md:bg-fixed"
-        style={{ backgroundImage: `url("${bannerSection.image.src}")` }}
+        style={{
+          backgroundImage: `url("${bannerSection.image.src}")`,
+          backgroundPosition: bannerSection.image.objectPosition,
+        }}
       />
       <div aria-hidden="true" className="absolute inset-0 bg-black/50" />
 
