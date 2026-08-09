@@ -32,7 +32,8 @@ export function BannerSection({
             : undefined
         }
       />
-      <div aria-hidden="true" className="absolute inset-0 bg-black/50" />
+      {/* 遮罩調淡讓照片更亮，文字改用陰影維持可讀性。 */}
+      <div aria-hidden="true" className="absolute inset-0 bg-black/25" />
 
       <div className="relative mx-auto flex min-h-[260px] max-w-6xl flex-col justify-center px-4 py-16 sm:min-h-[320px] sm:px-6">
         {isEditing && onEdit && (
@@ -45,11 +46,11 @@ export function BannerSection({
           </div>
         )}
 
-        <p className="text-xl font-bold leading-snug text-white sm:text-3xl">
+        <p className="text-xl font-bold leading-snug text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.75)] sm:text-3xl">
           {slogan}
         </p>
         {subtitle && (
-          <p className="mt-3 max-w-xl text-sm leading-7 text-white/85 sm:text-base">
+          <p className="mt-3 max-w-xl text-sm leading-7 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] sm:text-base">
             {subtitle}
           </p>
         )}
