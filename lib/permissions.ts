@@ -77,6 +77,14 @@ export function canBrowseSurfboards(input: RoleInput) {
   return canUseMemberFeatures(input);
 }
 
+/**
+ * 首頁內容管理：只有幹部以上（officer、admin）可以編輯首頁文字與圖片。
+ * board_manager、member、pending 與未登入訪客都只能瀏覽。
+ */
+export function canManageHomepage(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
 export function canViewMembers(input: RoleInput) {
   return canUseMemberFeatures(input);
 }
