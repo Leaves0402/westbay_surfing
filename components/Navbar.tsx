@@ -8,8 +8,11 @@ import { AppDrawer } from "@/components/navigation/AppDrawer";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { getRoleTone } from "@/lib/badgeTones";
+import { canUseMemberFeatures } from "@/lib/permissions";
+import { needsProfileCompletion } from "@/lib/profileCompletion";
 import type { Profile } from "@/lib/types";
 import { roleLabels } from "@/lib/types";
+import { useNavigationBadges } from "@/lib/useNavigationBadges";
 
 type NavbarProps = {
   user: User | null;
@@ -35,6 +38,15 @@ export function Navbar({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [hasScrolledPastHero, setHasScrolledPastHero] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const profileNeedsAttention = needsProfileCompletion(profile);
+  const navigationBadges = useNavigationBadges({
+    enabled: canUseMemberFeatures(profile),
+    userId: user?.id,
+  });
+  const hasMenuAttention =
+    profileNeedsAttention ||
+    navigationBadges.announcements ||
+    navigationBadges.lessons;
 
   const isOverlay = variant === "overlay";
 
@@ -75,14 +87,22 @@ export function Navbar({
             <button
               ref={menuButtonRef}
               type="button"
-              aria-label="開啟選單"
+              aria-label={
+                hasMenuAttention ? "開啟選單（有待查看項目）" : "開啟選單"
+              }
               aria-expanded={isDrawerOpen}
               aria-controls="app-drawer"
               title="開啟選單"
               onClick={() => setIsDrawerOpen(true)}
-              className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${iconButtonClasses}`}
+              className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${iconButtonClasses}`}
             >
               <Menu size={22} strokeWidth={2} />
+              {hasMenuAttention && (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white"
+                />
+              )}
             </button>
 
             <Link
@@ -163,6 +183,8 @@ export function Navbar({
         onLogin={() => void onLogin()}
         onLogout={() => void onLogout()}
         triggerRef={menuButtonRef}
+        profileNeedsAttention={profileNeedsAttention}
+        navigationBadges={navigationBadges}
       />
     </>
   );

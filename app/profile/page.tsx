@@ -91,18 +91,13 @@ export default function ProfilePage() {
             正在建立或讀取社員資料...
           </Card>
         ) : (
-          <>
-            <ProfileForm
-              key={`${profile.id}-${profile.requested_surf_level ?? ""}`}
-              user={user}
-              profile={profile}
-              setStatusMessage={setStatusMessage}
-              reloadProfile={reloadProfile}
-            />
-            {canUseMemberFeatures(profile) && (
-              <LessonAttendanceStatCard userId={user.id} />
-            )}
-          </>
+          <ProfileForm
+            key={`${profile.id}-${profile.requested_surf_level ?? ""}`}
+            user={user}
+            profile={profile}
+            setStatusMessage={setStatusMessage}
+            reloadProfile={reloadProfile}
+          />
         )}
 
         {statusMessage && (
@@ -116,7 +111,7 @@ export default function ProfilePage() {
   );
 }
 
-function LessonAttendanceStatCard({ userId }: { userId: string }) {
+function LessonAttendanceStat({ userId }: { userId: string }) {
   const [attendedCount, setAttendedCount] = useState(0);
   const [startedLessonCount, setStartedLessonCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -159,14 +154,14 @@ function LessonAttendanceStatCard({ userId }: { userId: string }) {
   }, [userId]);
 
   return (
-    <Card className="mt-6">
-      <h2 className="font-semibold text-text-primary">社課出席</h2>
-      <p className="mt-2 text-sm text-text-secondary">
+    <div>
+      <p className="text-xs text-text-secondary">社課出席</p>
+      <p className="mt-1 font-medium text-text-primary">
         {isLoading
           ? "讀取中..."
-          : loadError || `社課出席：${attendedCount} / ${startedLessonCount}`}
+          : loadError || `${attendedCount} / ${startedLessonCount} 次`}
       </p>
-    </Card>
+    </div>
   );
 }
 
@@ -255,7 +250,7 @@ function ProfileForm({
 
   return (
     <Card>
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p className="text-xs text-text-secondary">Email</p>
           <p className="mt-1 break-all font-medium text-text-primary">
@@ -276,6 +271,9 @@ function ProfileForm({
             <SurfLevelBadge level={profile.surf_level} />
           </p>
         </div>
+        {canUseMemberFeatures(profile) && (
+          <LessonAttendanceStat userId={user.id} />
+        )}
       </div>
 
       {profile.requested_surf_level && (

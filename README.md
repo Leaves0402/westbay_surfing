@@ -146,9 +146,10 @@ docs/sql/
 ```text
 docs/sql/apply_priority_fixes_and_surf_trip_stats.sql
 docs/sql/apply_medium_priority_improvements.sql
+docs/sql/add_navigation_badges.sql
 ```
 
-請依上列順序執行。第一個檔案會新增外衝計次資料、三日保留規則，以及課程／衝浪板／權限相關 RPC；第二個檔案會加入管理員上限與站主保護、程度審核權限、正式遞補，以及範圍／聚合查詢。站主會以 `tom.yeh.940402@gmail.com` 對應的 profile 設定，找不到時 SQL 會停止，不會套用錯誤帳號。
+請依上列順序執行。第一個檔案會新增外衝計次資料、三日保留規則，以及課程／衝浪板／權限相關 RPC；第二個檔案會加入管理員上限與站主保護、程度審核權限、正式遞補，以及範圍／聚合查詢；第三個檔案會新增公告與社課的小紅點閱讀狀態。站主會以 `tom.yeh.940402@gmail.com` 對應的 profile 設定，找不到時 SQL 會停止，不會套用錯誤帳號。
 
 外衝 lifecycle 會在環境允許時自動建立每小時排程；若無法啟用 `pg_cron`，開啟外衝頁或社員名單頁仍會自動處理。
 

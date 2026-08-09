@@ -11,7 +11,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { LessonsPanel } from "@/components/lessons/LessonsPanel";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -23,6 +22,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
+import { markNavigationChannelRead } from "@/lib/useNavigationBadges";
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("zh-TW", {
@@ -95,6 +95,7 @@ export default function AnnouncementsPage() {
     }
 
     setAnnouncements((data ?? []) as Announcement[]);
+    void markNavigationChannelRead("announcements");
   }, [setStatusMessage]);
 
   useEffect(() => {
@@ -289,14 +290,6 @@ export default function AnnouncementsPage() {
           </Card>
         ) : (
           <>
-            <div className="mb-6">
-              <LessonsPanel
-                userId={user.id}
-                profile={profile}
-                onStatusMessage={setStatusMessage}
-              />
-            </div>
-
             {canManage && (
               <Card className="mb-6">
                 <div className="mb-4 flex items-center gap-2">

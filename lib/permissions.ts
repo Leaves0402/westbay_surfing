@@ -36,6 +36,10 @@ export function canViewAnnouncements(input: RoleInput) {
   return canUseMemberFeatures(input);
 }
 
+export function canViewLessons(input: RoleInput) {
+  return canUseMemberFeatures(input);
+}
+
 export function canManageAnnouncements(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }

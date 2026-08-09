@@ -23,6 +23,7 @@ import {
   type Profile,
   type PublicMemberProfile,
 } from "@/lib/types";
+import { markNavigationChannelRead } from "@/lib/useNavigationBadges";
 
 type LessonCardData = Lesson & {
   instructors: PublicMemberProfile[];
@@ -142,6 +143,7 @@ export function LessonsPanel({
         ),
       }))
     );
+    void markNavigationChannelRead("lessons");
   }, [onStatusMessage]);
 
   useEffect(() => {
@@ -371,7 +373,7 @@ export function LessonsPanel({
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <BookOpen size={18} className="text-primary" />
-            <h2 className="font-semibold text-text-primary">社課公告</h2>
+            <h2 className="font-semibold text-text-primary">社課列表</h2>
           </div>
           <button
             type="button"

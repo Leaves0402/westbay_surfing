@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
+  BookOpen,
   CalendarCheck,
   ClipboardList,
   Home,
@@ -23,18 +24,21 @@ import { getRoleTone } from "@/lib/badgeTones";
 import {
   canViewAnnouncements,
   canViewAttendancePage,
+  canViewLessons,
   canViewMaintenancePage,
   canViewMembers,
   canViewSurfTrips,
 } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 import { roleLabels } from "@/lib/types";
+import type { NavigationBadges } from "@/lib/useNavigationBadges";
 
 type DrawerLink = {
   href: string;
   label: string;
   description: string;
   icon: typeof Home;
+  attentionLabel?: string;
 };
 
 type DrawerGroup = {
@@ -51,6 +55,8 @@ export function AppDrawer({
   onLogin,
   onLogout,
   triggerRef,
+  profileNeedsAttention,
+  navigationBadges,
 }: {
   isOpen: boolean;
   user: User | null;
@@ -61,6 +67,8 @@ export function AppDrawer({
   onLogout: () => void;
   /** 關閉後把焦點移回漢堡按鈕。 */
   triggerRef: React.RefObject<HTMLButtonElement | null>;
+  profileNeedsAttention: boolean;
+  navigationBadges: NavigationBadges;
 }) {
   const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -95,6 +103,16 @@ export function AppDrawer({
         label: "基本資料",
         description: "姓名、學號與衝浪程度",
         icon: UserRound,
+        attentionLabel: profileNeedsAttention ? "基本資料尚未完成" : undefined,
+      });
+    }
+    if (canViewLessons(profile)) {
+      memberLinks.push({
+        href: "/lessons",
+        label: "社課",
+        description: "查看社課、報名與候補",
+        icon: BookOpen,
+        attentionLabel: navigationBadges.lessons ? "有新社課" : undefined,
       });
     }
     if (canViewAnnouncements(profile)) {
@@ -103,6 +121,9 @@ export function AppDrawer({
         label: "公告",
         description: "社團公告與活動訊息",
         icon: Megaphone,
+        attentionLabel: navigationBadges.announcements
+          ? "有新公告"
+          : undefined,
       });
     }
     if (canViewSurfTrips(profile)) {
@@ -149,7 +170,7 @@ export function AppDrawer({
         ? [{ title: "幹部管理", links: staffLinks }]
         : []),
     ];
-  }, [profile, user]);
+  }, [navigationBadges, profile, profileNeedsAttention, user]);
 
   // 開啟時鎖定背景捲動。
   useEffect(() => {
@@ -307,9 +328,20 @@ export function AppDrawer({
                             strokeWidth={1.75}
                             className="mt-0.5 shrink-0"
                           />
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium">
-                              {link.label}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2 text-sm font-medium">
+                              <span className="truncate">{link.label}</span>
+                              {link.attentionLabel && (
+                                <>
+                                  <span
+                                    aria-hidden="true"
+                                    className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500"
+                                  />
+                                  <span className="sr-only">
+                                    （{link.attentionLabel}）
+                                  </span>
+                                </>
+                              )}
                             </span>
                             <span
                               className={`mt-0.5 block text-xs ${

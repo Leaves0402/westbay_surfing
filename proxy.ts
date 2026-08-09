@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 
 /**
  * 未登入時只允許進入的頁面。
- * 其餘頁面（/profile、/announcements、/trips、/attendance、/admin/*、/maintenance…）
+ * 其餘頁面（/profile、/lessons、/announcements、/trips、/attendance、/admin/*、/maintenance…）
  * 一律導回首頁並帶上 authRequired 提示。
  *
  * 這是前端的第一層 route guard；Supabase RLS 仍是最終權限防線。
