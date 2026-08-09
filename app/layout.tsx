@@ -17,7 +17,7 @@ const notoSansTC = Noto_Sans_TC({
 
 export const metadata: Metadata = {
   title: "西灣衝浪社",
-  description: "西灣衝浪社內部網站",
+  description: "西灣衝浪社公開首頁與社員租板、社課、外衝管理網站",
 };
 
 export default function RootLayout({

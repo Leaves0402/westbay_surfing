@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
-import { MobileTabBar } from "@/components/ui/MobileTabBar";
 import { getRoleTone } from "@/lib/badgeTones";
 import { hasLessonStarted } from "@/lib/lessonTime";
 import { countLessonAttendance } from "@/lib/lessonStats";
@@ -41,7 +40,7 @@ export default function ProfilePage() {
   } = useAuthProfile();
 
   return (
-    <main className="min-h-screen bg-appBg pb-24 text-text-primary md:pb-10">
+    <main className="min-h-screen bg-appBg text-text-primary">
       <Navbar
         user={user}
         profile={profile}
@@ -118,8 +117,6 @@ export default function ProfilePage() {
           </Card>
         )}
       </div>
-
-      <MobileTabBar />
     </main>
   );
 }
