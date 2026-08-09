@@ -50,12 +50,6 @@ export default function AttendancePage() {
   const [members, setMembers] = useState<PublicMemberProfile[]>([]);
   const [instructors, setInstructors] = useState<LessonInstructor[]>([]);
   const [participants, setParticipants] = useState<LessonParticipant[]>([]);
-  const [instructorAttendance, setInstructorAttendance] = useState<
-    LessonInstructorAttendance[]
-  >([]);
-  const [memberAttendance, setMemberAttendance] = useState<
-    LessonMemberAttendance[]
-  >([]);
   const [allInstructorAttendance, setAllInstructorAttendance] = useState<
     LessonInstructorAttendance[]
   >([]);
@@ -160,22 +154,25 @@ export default function AttendancePage() {
     queueMicrotask(() => void loadData());
   }, [canView, loadData]);
 
-  useEffect(() => {
-    if (!selectedLessonId) {
-      setInstructorAttendance([]);
-      setMemberAttendance([]);
-      return;
-    }
+  const instructorAttendance = useMemo(
+    () =>
+      selectedLessonId
+        ? allInstructorAttendance.filter(
+            (item) => item.lesson_id === selectedLessonId
+          )
+        : [],
+    [allInstructorAttendance, selectedLessonId]
+  );
 
-    setInstructorAttendance(
-      allInstructorAttendance.filter(
-        (item) => item.lesson_id === selectedLessonId
-      )
-    );
-    setMemberAttendance(
-      allMemberAttendance.filter((item) => item.lesson_id === selectedLessonId)
-    );
-  }, [allInstructorAttendance, allMemberAttendance, selectedLessonId]);
+  const memberAttendance = useMemo(
+    () =>
+      selectedLessonId
+        ? allMemberAttendance.filter(
+            (item) => item.lesson_id === selectedLessonId
+          )
+        : [],
+    [allMemberAttendance, selectedLessonId]
+  );
 
   const lessonInstructors = useMemo(
     () =>

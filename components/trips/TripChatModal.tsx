@@ -67,7 +67,7 @@ export function TripChatModal({
   }, [onError, tripId]);
 
   useEffect(() => {
-    void loadMessages();
+    queueMicrotask(() => void loadMessages());
   }, [loadMessages]);
 
   const handleSend = async () => {
