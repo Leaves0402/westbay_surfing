@@ -36,6 +36,7 @@ export function SurfboardPicker({
   isLoading,
   isSubmitting,
   loadErrorMessage,
+  confirmLabel = "確認登記租板",
   onClose,
   onConfirm,
 }: {
@@ -47,6 +48,8 @@ export function SurfboardPicker({
   isLoading: boolean;
   isSubmitting: boolean;
   loadErrorMessage: string;
+  /** 會員直接登記；非社員流程則先進入最終摘要。 */
+  confirmLabel?: string;
   onClose: () => void;
   onConfirm: (surfboardId: string) => Promise<void>;
 }) {
@@ -382,7 +385,7 @@ export function SurfboardPicker({
               {selectedBoard ? (
                 <span className="inline-flex items-center gap-2 align-middle">
                   <span className="font-medium text-slate-900">
-                    {selectedBoard.name}
+                    <span translate="no">{selectedBoard.name}</span>
                   </span>
                   <Badge tone="success">
                     <Check size={12} />
@@ -403,7 +406,7 @@ export function SurfboardPicker({
               }}
               disabled={!selectedBoardId || isSubmitting}
             >
-              {isSubmitting ? "登記中..." : "確認登記租板"}
+              {isSubmitting ? "處理中..." : confirmLabel}
             </Button>
           </div>
         )}

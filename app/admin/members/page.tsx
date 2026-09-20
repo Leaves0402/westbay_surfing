@@ -699,7 +699,9 @@ export default function MembersAdminPage() {
                               </td>
                             )}
                             <td className="truncate px-2 py-2 font-medium text-text-primary md:px-3">
-                              {member.full_name || "未填姓名"}
+                              <span translate="no">
+                                {member.full_name || "未填姓名"}
+                              </span>
                               {member.id === adminGovernance?.owner_user_id && (
                                 <span className="ml-1 text-[10px] font-medium text-primary md:text-xs">
                                   站主
@@ -859,7 +861,9 @@ export default function MembersAdminPage() {
                                 />
                               </td>
                               <td className="px-3 py-3 font-medium text-text-primary">
-                                {member.full_name || "未填姓名"}
+                                <span translate="no">
+                                  {member.full_name || "未填姓名"}
+                                </span>
                               </td>
                               <td className="px-3 py-3 text-text-secondary">
                                 {member.student_id || "未填學號"}
@@ -890,7 +894,9 @@ export default function MembersAdminPage() {
                           />
                           <div className="min-w-0">
                             <p className="font-medium text-text-primary">
-                              {member.full_name || "未填姓名"}
+                              <span translate="no">
+                                {member.full_name || "未填姓名"}
+                              </span>
                             </p>
                             <p className="mt-0.5 text-xs text-text-secondary">
                               學號：{member.student_id || "未填學號"}
@@ -960,7 +966,9 @@ export default function MembersAdminPage() {
                               className="border-b border-line last:border-b-0"
                             >
                               <td className="px-3 py-3 font-medium text-text-primary">
-                                {member.full_name || "未填姓名"}
+                                <span translate="no">
+                                  {member.full_name || "未填姓名"}
+                                </span>
                               </td>
                               <td className="px-3 py-3 text-text-secondary">
                                 {member.student_id || "未填學號"}
@@ -1032,7 +1040,9 @@ export default function MembersAdminPage() {
                           className="rounded-xl border border-line bg-appBg p-3"
                         >
                           <p className="font-medium text-text-primary">
-                            {member.full_name || "未填姓名"}
+                            <span translate="no">
+                              {member.full_name || "未填姓名"}
+                            </span>
                           </p>
                           <p className="mt-0.5 text-xs text-text-secondary">
                             學號：{member.student_id || "未填學號"}

@@ -279,7 +279,7 @@ export function AppDrawer({
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {user && (
             <div className="mb-4 rounded-2xl border border-border bg-bg p-3">
-              <p className="truncate font-medium text-slate-900">
+              <p translate="no" className="truncate font-medium text-slate-900">
                 {profile?.full_name || "未填姓名"}
               </p>
               <p className="mt-1">

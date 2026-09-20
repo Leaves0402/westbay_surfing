@@ -84,6 +84,7 @@ export function InstructorMultiSelect({
           {selectedInstructors.map((instructor) => (
             <span
               key={instructor.id}
+              translate="no"
               className="inline-flex items-center gap-1 rounded-full bg-primary-light px-2.5 py-1 text-xs font-medium text-primary"
             >
               {formatInstructorOption(instructor)}
@@ -142,7 +143,7 @@ export function InstructorMultiSelect({
                           disabled={disabled}
                           className="h-4 w-4 rounded border-line text-primary focus:ring-2 focus:ring-primary"
                         />
-                        <span className="text-text-primary">
+                        <span translate="no" className="text-text-primary">
                           {formatInstructorOption(instructor)}
                         </span>
                       </label>

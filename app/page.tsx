@@ -91,7 +91,7 @@ export default function Home() {
             NSYSU SURF CLUB
           </p>
 
-          <h1 className="mt-4 text-4xl font-bold tracking-tight text-white drop-shadow-sm sm:text-5xl lg:text-6xl">
+          <h1 translate="no" className="mt-4 text-4xl font-bold tracking-tight text-white drop-shadow-sm sm:text-5xl lg:text-6xl">
             {view.content.heroTitle}
           </h1>
 

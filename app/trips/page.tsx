@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { useLanguage } from "@/components/LanguageProvider";
 import { SpotMultiSelect, formatSpotLabel } from "@/components/trips/SpotMultiSelect";
 import { TripChatModal } from "@/components/trips/TripChatModal";
 import {
@@ -24,6 +25,7 @@ import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { getRoleTone } from "@/lib/badgeTones";
+import { localeForIntl, type AppLocale } from "@/lib/i18n";
 import {
   canCreateSurfTrips,
   canViewSurfTrips,
@@ -54,8 +56,8 @@ function parseLocalDate(dateString: string) {
   return new Date(`${dateString}T00:00:00+08:00`);
 }
 
-function formatDate(dateString: string) {
-  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+function formatDate(dateString: string, locale: AppLocale) {
+  return parseLocalDate(dateString).toLocaleDateString(localeForIntl(locale), {
     timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
@@ -63,9 +65,9 @@ function formatDate(dateString: string) {
   });
 }
 
-function formatDateRange(startDate: string, endDate: string) {
-  if (startDate === endDate) return formatDate(startDate);
-  return `${formatDate(startDate)} – ${formatDate(endDate)}`;
+function formatDateRange(startDate: string, endDate: string, locale: AppLocale) {
+  if (startDate === endDate) return formatDate(startDate, locale);
+  return `${formatDate(startDate, locale)} – ${formatDate(endDate, locale)}`;
 }
 
 function formatMinSurfLevel(level: string | null | undefined) {
@@ -74,6 +76,7 @@ function formatMinSurfLevel(level: string | null | undefined) {
 }
 
 export default function TripsPage() {
+  const { locale } = useLanguage();
   const {
     user,
     profile,
@@ -912,7 +915,7 @@ export default function TripsPage() {
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-base font-semibold text-text-primary">
-                              {formatDateRange(trip.start_date, trip.end_date)}
+                              {formatDateRange(trip.start_date, trip.end_date, locale)}
                             </p>
                             {hasStarted && (
                               <p className="mt-1 text-xs font-medium text-success">
@@ -921,11 +924,15 @@ export default function TripsPage() {
                             )}
                             <p className="mt-1 text-sm text-text-secondary">
                               地點：
-                              {trip.spots.length > 0
-                                ? trip.spots
-                                    .map((spot) => formatSpotLabel(spot))
-                                    .join("、")
-                                : "未指定"}
+                                {trip.spots.length > 0 ? (
+                                  <span translate="no">
+                                    {trip.spots
+                                      .map((spot) => formatSpotLabel(spot))
+                                      .join("、")}
+                                  </span>
+                                ) : (
+                                  "未指定"
+                                )}
                             </p>
                           </div>
 
@@ -1049,7 +1056,7 @@ export default function TripsPage() {
                           </div>
                           {trip.note && (
                             <p className="whitespace-pre-wrap">
-                              備註：{trip.note}
+                              備註：<span translate="no">{trip.note}</span>
                             </p>
                           )}
                         </div>
@@ -1165,7 +1172,9 @@ export default function TripsPage() {
                                           {entry.waitlist_order}
                                         </td>
                                         <td className="px-3 py-2 font-medium">
-                                          {member?.full_name || "未填姓名"}
+                                          <span translate="no">
+                                            {member?.full_name || "未填姓名"}
+                                          </span>
                                         </td>
                                         <td className="px-3 py-2">
                                           <SurfLevelBadge
@@ -1200,7 +1209,7 @@ export default function TripsPage() {
       {chatTrip && user && (
         <TripChatModal
           tripId={chatTrip.id}
-          title={`${formatDateRange(chatTrip.start_date, chatTrip.end_date)} · ${
+          title={`${formatDateRange(chatTrip.start_date, chatTrip.end_date, locale)} · ${
             chatTrip.spots.length > 0
               ? chatTrip.spots.map((spot) => formatSpotLabel(spot)).join("、")
               : "未指定地點"

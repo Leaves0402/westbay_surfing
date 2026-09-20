@@ -1,4 +1,5 @@
 import type { RentalSlot } from "@/lib/types";
+import { localeForIntl, type AppLocale } from "@/lib/i18n";
 import { getTaipeiDate } from "@/lib/taipeiTime";
 
 type RentalSlotSchedule = Pick<RentalSlot, "rental_date" | "start_time">;
@@ -44,7 +45,11 @@ export function isRentalSlotStartInFuture(
   return startTimestamp > nowMs;
 }
 
-export const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
+export function getWeekdayLabels(locale: AppLocale = "zh-Hant") {
+  return locale === "en"
+    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    : ["一", "二", "三", "四", "五", "六", "日"];
+}
 
 export function parseLocalDate(dateString: string) {
   return new Date(`${dateString}T00:00:00Z`);
@@ -57,8 +62,11 @@ export function toDateString(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export function formatRentalDate(dateString: string) {
-  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+export function formatRentalDate(
+  dateString: string,
+  locale: AppLocale = "zh-Hant"
+) {
+  return parseLocalDate(dateString).toLocaleDateString(localeForIntl(locale), {
     timeZone: "UTC",
     year: "numeric",
     month: "2-digit",
@@ -67,8 +75,11 @@ export function formatRentalDate(dateString: string) {
   });
 }
 
-export function formatRentalShortDate(dateString: string) {
-  return parseLocalDate(dateString).toLocaleDateString("zh-TW", {
+export function formatRentalShortDate(
+  dateString: string,
+  locale: AppLocale = "zh-Hant"
+) {
+  return parseLocalDate(dateString).toLocaleDateString(localeForIntl(locale), {
     timeZone: "UTC",
     year: "numeric",
     month: "2-digit",
@@ -76,8 +87,11 @@ export function formatRentalShortDate(dateString: string) {
   });
 }
 
-export function formatRentalMonth(date: Date) {
-  return date.toLocaleDateString("zh-TW", {
+export function formatRentalMonth(
+  date: Date,
+  locale: AppLocale = "zh-Hant"
+) {
+  return date.toLocaleDateString(localeForIntl(locale), {
     timeZone: "UTC",
     year: "numeric",
     month: "long",

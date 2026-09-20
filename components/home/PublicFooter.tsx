@@ -62,7 +62,7 @@ export function PublicFooter({
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
           <div>
             <h2 className="text-lg font-bold tracking-tight">
-              {content.footerClubName}
+              <span translate="no">{content.footerClubName}</span>
             </h2>
             {content.footerDescription && (
               <p className="mt-3 max-w-sm text-sm leading-7 text-white/70">
@@ -114,11 +114,11 @@ export function PublicFooter({
                           href={adminContactHref}
                           className="block break-words text-white underline decoration-white/40 underline-offset-4 hover:decoration-white"
                         >
-                          {content.footerAdminContact}
+                          <span translate="no">{content.footerAdminContact}</span>
                         </a>
                       ) : (
                         <span className="block break-words text-white/80">
-                          {content.footerAdminContact}
+                          <span translate="no">{content.footerAdminContact}</span>
                         </span>
                       )}
                     </span>
@@ -140,7 +140,7 @@ export function PublicFooter({
 
         <div className="mt-12 border-t border-white/15 pt-5">
           <p className="text-xs text-white/50">
-            © {new Date().getFullYear()} {content.footerClubName}．社團內部網站
+            © {new Date().getFullYear()} <span translate="no">{content.footerClubName}</span>．社團內部網站
           </p>
         </div>
       </div>

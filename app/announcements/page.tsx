@@ -12,9 +12,11 @@ import {
   X,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { useLanguage } from "@/components/LanguageProvider";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
+import { localeForIntl, type AppLocale } from "@/lib/i18n";
 import {
   canManageAnnouncements,
   canViewAnnouncements,
@@ -24,8 +26,8 @@ import type { Announcement } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
 import { markNavigationChannelRead } from "@/lib/useNavigationBadges";
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("zh-TW", {
+function formatDateTime(value: string, locale: AppLocale) {
+  return new Date(value).toLocaleString(localeForIntl(locale), {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -46,6 +48,7 @@ function AnnouncementSkeleton() {
 }
 
 export default function AnnouncementsPage() {
+  const { locale } = useLanguage();
   const {
     user,
     profile,
@@ -421,10 +424,10 @@ export default function AnnouncementsPage() {
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <h3 className="text-lg font-semibold text-text-primary">
-                                {announcement.title}
+                                <span translate="no">{announcement.title}</span>
                               </h3>
                               <p className="mt-1 text-xs text-text-secondary">
-                                {formatDateTime(announcement.created_at)}
+                                {formatDateTime(announcement.created_at, locale)}
                               </p>
                             </div>
 
@@ -460,7 +463,7 @@ export default function AnnouncementsPage() {
                           </div>
 
                           <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-text-primary/80">
-                            {announcement.content}
+                            <span translate="no">{announcement.content}</span>
                           </p>
                         </>
                       )}

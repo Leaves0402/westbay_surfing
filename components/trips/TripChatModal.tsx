@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { MessageCircle, RefreshCw, X } from "lucide-react";
+import { useLanguage } from "@/components/LanguageProvider";
 import { Button } from "@/components/ui/Button";
 import { fieldControlClasses } from "@/components/ui/FormField";
+import { localeForIntl, type AppLocale } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import type { PublicMemberProfile, SurfTripMessage } from "@/lib/types";
 import { useDialogAccessibility } from "@/lib/useDialogAccessibility";
@@ -18,8 +20,8 @@ type TripChatModalProps = {
   onError: (message: string) => void;
 };
 
-function formatMessageTime(value: string) {
-  return new Date(value).toLocaleString("zh-TW", {
+function formatMessageTime(value: string, locale: AppLocale) {
+  return new Date(value).toLocaleString(localeForIntl(locale), {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -36,6 +38,7 @@ export function TripChatModal({
   onClose,
   onError,
 }: TripChatModalProps) {
+  const { locale } = useLanguage();
   const panelRef = useDialogAccessibility({ onClose });
   const titleId = useId();
   const descriptionId = useId();
@@ -176,14 +179,14 @@ export function TripChatModal({
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-xs font-medium text-text-primary">
+                    <p translate="no" className="truncate text-xs font-medium text-text-primary">
                       {getMemberName(item.user_id)}
                     </p>
                     <p className="shrink-0 text-[10px] text-text-secondary">
-                      {formatMessageTime(item.created_at)}
+                      {formatMessageTime(item.created_at, locale)}
                     </p>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">
+                  <p translate="no" className="mt-1 whitespace-pre-wrap text-sm text-text-primary">
                     {item.message}
                   </p>
                 </div>

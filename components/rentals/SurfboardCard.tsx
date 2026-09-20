@@ -75,7 +75,7 @@ export function SurfboardCard({
       </div>
 
       <span className="mt-2 block w-full truncate text-center text-sm font-semibold text-slate-900">
-        {board.name}
+        <span translate="no">{board.name}</span>
       </span>
 
       <span className="mt-1 flex w-full justify-center">

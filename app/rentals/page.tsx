@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
-import { LoginPromptDialog } from "@/components/auth/LoginPromptDialog";
+import { useLanguage } from "@/components/LanguageProvider";
 import { PublicRentalSchedule } from "@/components/rentals/PublicRentalSchedule";
 import { SurfboardManager } from "@/components/rentals/SurfboardManager";
 import { SurfboardPicker } from "@/components/rentals/SurfboardPicker";
@@ -44,11 +44,11 @@ import {
   formatRentalTime as formatTime,
   getCalendarCells,
   getTaipeiTodayDate,
+  getWeekdayLabels,
   isRentalSlotExpired,
   isRentalSlotStartInFuture,
   parseLocalDate,
   toDateString,
-  weekdayLabels,
 } from "@/lib/rentalSlots";
 import {
   createSignedSurfboardImageUrls,
@@ -110,12 +110,39 @@ function ResponsiblePersonTag({
   return (
     <span className="inline-flex items-center gap-2">
       <Badge tone={getRoleTone(info.role)}>{roleLabels[info.role]}</Badge>
-      <span className="text-sm font-medium text-slate-700">{info.name}</span>
+      <span translate="no" className="text-sm font-medium text-slate-700">{info.name}</span>
     </span>
   );
 }
 
+function getRentalRenterIdentity(
+  registration: RentalRegistration,
+  member: PublicMemberProfile | null
+) {
+  if (registration.renter_type === "guest") {
+    return {
+      name:
+        registration.guest_name ||
+        (registration.personal_data_deleted_at
+          ? "非社員（資料已刪除）"
+          : "非社員"),
+      identifier: registration.guest_phone || "電話已刪除",
+      surfLevel: "初階",
+      isGuest: true,
+    };
+  }
+
+  return {
+    name: member?.full_name || "未填姓名",
+    identifier: member?.student_id || "未填學號",
+    surfLevel: member?.surf_level ?? null,
+    isGuest: false,
+  };
+}
+
 export default function RentalsPage() {
+  const { locale } = useLanguage();
+  const weekdayLabels = getWeekdayLabels(locale);
   const {
     user,
     profile,
@@ -141,7 +168,6 @@ export default function RentalsPage() {
   const [isLoadingSurfboards, setIsLoadingSurfboards] = useState(false);
   const [surfboardLoadError, setSurfboardLoadError] = useState("");
   const [pickerSlotId, setPickerSlotId] = useState<string | null>(null);
-  const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const [monthCursor, setMonthCursor] = useState(() =>
     parseLocalDate(getTaipeiTodayDate())
   );
@@ -353,7 +379,7 @@ export default function RentalsPage() {
     const visibleSlots = (slotsResult.data ?? []) as RentalSlot[];
     const visibleSlotIds = visibleSlots.map((slot) => slot.id);
     const registrationColumns =
-      "id, rental_slot_id, user_id, surfboard_id, is_paid, paid_at, paid_by, created_at, updated_at";
+      "id, rental_slot_id, user_id, renter_type, guest_name, guest_phone, guest_note, rental_fee, personal_data_deleted_at, surfboard_id, is_paid, paid_at, paid_by, created_at, updated_at";
     const emptyResult = { data: [], error: null };
 
     let outstandingQuery = supabase
@@ -906,7 +932,7 @@ export default function RentalsPage() {
               <p className="mt-1 text-sm leading-6 text-slate-500">
                 {canView
                   ? "社員以上可以查看與登記；板務、幹部與管理員可以新增、開關、刪除時段並管理繳費狀態。"
-                  : "公開頁面提供租板日期、時間、開放狀態、最低程度與剩餘名額；登入並通過審核後即可登記。"}
+                  : "公開頁面可查看時段與遮罩名單；未登入的非社員也能依初階限制登記租板。"}
               </p>
             </div>
           </div>
@@ -918,15 +944,9 @@ export default function RentalsPage() {
             正在讀取登入狀態...
           </Card>
         ) : !user ? (
-          <PublicRentalSchedule
-            mode="guest"
-            onRequireLogin={() => setIsLoginPromptOpen(true)}
-          />
+          <PublicRentalSchedule mode="guest" />
         ) : !canView ? (
-          <PublicRentalSchedule
-            mode="pending"
-            onRequireLogin={() => setIsLoginPromptOpen(true)}
-          />
+          <PublicRentalSchedule mode="pending" />
         ) : (
           <>
             {canManageSlots && (
@@ -1077,7 +1097,7 @@ export default function RentalsPage() {
                       <ChevronLeft size={18} />
                     </Button>
                     <p className="min-w-24 text-center text-sm font-semibold text-slate-800">
-                      {formatMonth(monthCursor)}
+                      {formatMonth(monthCursor, locale)}
                     </p>
                     <Button
                       variant="outline"
@@ -1288,16 +1308,6 @@ export default function RentalsPage() {
         />
       )}
 
-      {isLoginPromptOpen && (
-        <LoginPromptDialog
-          description="登記租板需要社員身分。登入後會自動建立社員資料，經幹部審核後即可登記並挑選衝浪板。"
-          onLogin={() => {
-            setIsLoginPromptOpen(false);
-            void handleGoogleLogin("/rentals");
-          }}
-          onClose={() => setIsLoginPromptOpen(false)}
-        />
-      )}
     </main>
   );
 }
@@ -1352,6 +1362,7 @@ function RentalSlotDetail({
     isPaid: boolean
   ) => Promise<void>;
 }) {
+  const { locale } = useLanguage();
   const meetsLevel = userMeetsSurfLevel(profile, slot.min_surf_level);
   const blockedByUnpaid = myUnpaidCount >= 2;
   const canRegister =
@@ -1382,7 +1393,7 @@ function RentalSlotDetail({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">時段詳細資料</h2>
-          <p className="mt-1 text-sm text-slate-500">{formatDate(slot.rental_date)}</p>
+          <p className="mt-1 text-sm text-slate-500">{formatDate(slot.rental_date, locale)}</p>
         </div>
 
         {canManageSlots && (
@@ -1502,7 +1513,7 @@ function RentalSlotDetail({
               <tr className="border-b border-border bg-bg text-xs text-slate-500">
                 <th className="px-3 py-2 text-center font-medium">編號</th>
                 <th className="px-3 py-2 text-center font-medium">姓名</th>
-                <th className="px-3 py-2 text-center font-medium">學號</th>
+                <th className="px-3 py-2 text-center font-medium">學號／電話</th>
                 <th className="px-3 py-2 text-center font-medium">衝浪程度</th>
                 <th className="px-3 py-2 text-center font-medium">繳費</th>
                 <th className="px-3 py-2 text-center font-medium">衝浪板</th>
@@ -1512,6 +1523,9 @@ function RentalSlotDetail({
               {registrationRows.map((registration, index) => {
                 const renter = registration
                   ? getPublicProfileById(registration.user_id)
+                  : null;
+                const renterIdentity = registration
+                  ? getRentalRenterIdentity(registration, renter)
                   : null;
                 const surfboard = registration
                   ? getRegistrationSurfboard(registration)
@@ -1524,14 +1538,19 @@ function RentalSlotDetail({
                   >
                     <td className="px-3 py-3 text-slate-500">{index + 1}</td>
                     <td className="px-3 py-3 font-medium text-slate-800">
-                      {registration ? renter?.full_name || "未填姓名" : "空位"}
+                      {renterIdentity ? (
+                        <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
+                          <span translate="no">{renterIdentity.name}</span>
+                          {renterIdentity.isGuest && <Badge tone="info">非社員</Badge>}
+                        </span>
+                      ) : "空位"}
                     </td>
                     <td className="px-3 py-3 text-slate-600">
-                      {registration ? renter?.student_id || "未填學號" : "-"}
+                      {renterIdentity?.identifier ?? "-"}
                     </td>
                     <td className="px-3 py-3">
                       {registration ? (
-                        <SurfLevelPill level={renter?.surf_level ?? null} />
+                        <SurfLevelPill level={renterIdentity?.surfLevel ?? null} />
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
@@ -1560,7 +1579,7 @@ function RentalSlotDetail({
                             imageUrl={surfboard.imageUrl}
                           />
                           <span className="max-w-24 truncate text-xs text-slate-600">
-                            {surfboard.board.name}
+                            <span translate="no">{surfboard.board.name}</span>
                           </span>
                         </span>
                       ) : (
@@ -1579,6 +1598,9 @@ function RentalSlotDetail({
             const renter = registration
               ? getPublicProfileById(registration.user_id)
               : null;
+            const renterIdentity = registration
+              ? getRentalRenterIdentity(registration, renter)
+              : null;
             const surfboard = registration
               ? getRegistrationSurfboard(registration)
               : null;
@@ -1592,17 +1614,21 @@ function RentalSlotDetail({
                   <div className="min-w-0">
                     <p className="text-xs text-slate-400">編號 {index + 1}</p>
                     <p className="mt-0.5 truncate font-medium text-slate-800">
-                      {registration ? renter?.full_name || "未填姓名" : "空位"}
+                      {renterIdentity?.name ?? "空位"}
                     </p>
                     {registration && (
                       <p className="mt-0.5 truncate text-xs text-slate-500">
-                        學號：{renter?.student_id || "未填學號"}
+                        {renterIdentity?.isGuest ? "電話" : "學號"}：
+                        {renterIdentity?.identifier}
                       </p>
                     )}
                   </div>
                   {registration && (
                     <span className="shrink-0">
-                      <SurfLevelPill level={renter?.surf_level ?? null} />
+                      <span className="inline-flex items-center gap-1.5">
+                        {renterIdentity?.isGuest && <Badge tone="info">非社員</Badge>}
+                        <SurfLevelPill level={renterIdentity?.surfLevel ?? null} />
+                      </span>
                     </span>
                   )}
                 </div>
@@ -1630,7 +1656,7 @@ function RentalSlotDetail({
                             className="h-9 w-9"
                           />
                           <span className="min-w-0 truncate text-xs text-slate-600">
-                            {surfboard.board.name}
+                            <span translate="no">{surfboard.board.name}</span>
                           </span>
                         </>
                       ) : (
@@ -1744,6 +1770,7 @@ function UnpaidRentalsTable({
   updatingPaymentRegistrationId: string | null;
   onMarkPaid: (registration: RentalRegistration) => Promise<void>;
 }) {
+  const { locale } = useLanguage();
   return (
     <Card>
       <div className="mb-4 flex items-center gap-2">
@@ -1771,6 +1798,10 @@ function UnpaidRentalsTable({
                     (item) => item.id === registration.rental_slot_id
                   );
                   const renter = getPublicProfileById(registration.user_id);
+                  const renterIdentity = getRentalRenterIdentity(
+                    registration,
+                    renter
+                  );
                   const boardManager = getResponsibleProfileById(
                     slot?.board_manager_id ?? null
                   );
@@ -1786,21 +1817,22 @@ function UnpaidRentalsTable({
                     >
                       <td className="px-3 py-3">
                         <p className="font-medium text-slate-800">
-                          {renter?.full_name || "未填姓名"}
+                          <span translate="no">{renterIdentity.name}</span>
                         </p>
                         <p className="text-xs text-slate-500">
-                          {renter?.student_id || "未填學號"}
+                          {renterIdentity.isGuest ? "電話：" : "學號："}
+                          {renterIdentity.identifier}
                         </p>
                       </td>
                       <td className="px-3 py-3 text-slate-600">
                         {typeof managerInfo === "string"
                           ? managerInfo
-                          : managerInfo.name}
+                          : <span translate="no">{managerInfo.name}</span>}
                       </td>
                       <td className="px-3 py-3 text-slate-600">
                         {slot ? (
                           <>
-                            <p>{formatShortDate(slot.rental_date)}</p>
+                            <p>{formatShortDate(slot.rental_date, locale)}</p>
                             <p className="text-xs text-slate-500">
                               {formatTime(slot.start_time)}–
                               {formatTime(slot.end_time)}
@@ -1839,6 +1871,10 @@ function UnpaidRentalsTable({
                 (item) => item.id === registration.rental_slot_id
               );
               const renter = getPublicProfileById(registration.user_id);
+              const renterIdentity = getRentalRenterIdentity(
+                registration,
+                renter
+              );
               const boardManager = getResponsibleProfileById(
                 slot?.board_manager_id ?? null
               );
@@ -1853,21 +1889,22 @@ function UnpaidRentalsTable({
                   className="rounded-xl border border-border bg-bg p-3"
                 >
                   <p className="font-medium text-slate-800">
-                    {renter?.full_name || "未填姓名"}
+                    <span translate="no">{renterIdentity.name}</span>
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    學號：{renter?.student_id || "未填學號"}
+                    {renterIdentity.isGuest ? "電話" : "學號"}：
+                    {renterIdentity.identifier}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     負責板務：
                     {typeof managerInfo === "string"
                       ? managerInfo
-                      : managerInfo.name}
+                      : <span translate="no">{managerInfo.name}</span>}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     日期：
                     {slot
-                      ? `${formatShortDate(slot.rental_date)} ${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`
+                      ? `${formatShortDate(slot.rental_date, locale)} ${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`
                       : "-"}
                   </p>
                   <div className="mt-3 border-t border-border pt-3">

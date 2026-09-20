@@ -253,7 +253,7 @@ function OfficerCard({ officer }: { officer: HomepageOfficer }) {
       <figcaption className="mt-3">
         <p className="text-xs font-medium text-primary">{officer.roleTitle}</p>
         <p className="mt-0.5 truncate text-sm font-semibold text-slate-900">
-          {officer.displayName}
+          <span translate="no">{officer.displayName}</span>
         </p>
         {officer.bio && (
           <p className="mt-1 text-xs leading-5 text-slate-500">{officer.bio}</p>

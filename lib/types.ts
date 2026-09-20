@@ -63,7 +63,15 @@ export type RentalSlot = {
 export type RentalRegistration = {
   id: string;
   rental_slot_id: string;
-  user_id: string;
+  /** 社員登記有 user_id；非社員登記固定為 null。 */
+  user_id: string | null;
+  renter_type: "member" | "guest";
+  /** 只會透過社員以上可讀的名單載入；公開 RPC 永遠不回傳原始值。 */
+  guest_name: string | null;
+  guest_phone: string | null;
+  guest_note: string | null;
+  rental_fee: number;
+  personal_data_deleted_at: string | null;
   /** 登記時挑選的衝浪板；本功能上線前的舊資料為 null。 */
   surfboard_id: string | null;
   is_paid: boolean;

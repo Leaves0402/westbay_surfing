@@ -146,7 +146,7 @@ export function TripConvoy({
               🏄
             </div>
             <p className="mt-1 max-w-14 truncate text-center text-[11px] font-medium text-text-primary md:max-w-16 md:text-xs">
-              {options.leaderName}
+              <span translate="no">{options.leaderName}</span>
             </p>
             <p className="text-[10px] text-text-secondary">車長</p>
           </div>
@@ -226,7 +226,9 @@ export function TripConvoy({
           {passenger ? (
             <div className="mt-1 flex w-full flex-col items-center gap-0.5">
               <p className="max-w-full truncate text-center text-[10px] font-medium text-text-primary md:text-[11px]">
-                {passengerProfile?.full_name || "未填姓名"}
+                <span translate="no">
+                  {passengerProfile?.full_name || "未填姓名"}
+                </span>
               </p>
               <span className="origin-top scale-90">
                 <SurfLevelBadge level={passengerProfile?.surf_level} />

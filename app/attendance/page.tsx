@@ -8,6 +8,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { useLanguage } from "@/components/LanguageProvider";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -32,6 +33,7 @@ import type {
 import { useAuthProfile } from "@/lib/useAuthProfile";
 
 export default function AttendancePage() {
+  const { locale } = useLanguage();
   const {
     user,
     profile,
@@ -478,7 +480,8 @@ export default function AttendancePage() {
                         {formatLessonLabel(
                           lesson.lesson_date,
                           lesson.start_time,
-                          lesson.end_time
+                          lesson.end_time,
+                          locale
                         )}
                       </option>
                     ))}
@@ -557,7 +560,11 @@ export default function AttendancePage() {
                               />
                             </td>
                             <td className="px-3 py-2 font-medium">
-                              {instructor.full_name || "未填姓名"}
+                              <span translate="no">
+                              <span translate="no">
+                                {instructor.full_name || "未填姓名"}
+                              </span>
+                              </span>
                             </td>
                             <td className="px-3 py-2">
                               <SurfLevelBadge level={instructor.surf_level} />
@@ -616,7 +623,11 @@ export default function AttendancePage() {
                               />
                             </td>
                             <td className="px-3 py-2 font-medium">
-                              {member?.full_name || "未填姓名"}
+                              <span translate="no">
+                              <span translate="no">
+                                {member?.full_name || "未填姓名"}
+                              </span>
+                              </span>
                             </td>
                             <td className="px-3 py-2">
                               <SurfLevelBadge level={member?.surf_level} />
@@ -686,7 +697,11 @@ export default function AttendancePage() {
                     {instructorStats.map(({ member, teachingCount, total }) => (
                       <tr key={member.id} className="border-t border-line">
                         <td className="px-3 py-2 font-medium">
-                          {member.full_name || "未填姓名"}
+                          <span translate="no">
+                          <span translate="no">
+                            {member.full_name || "未填姓名"}
+                          </span>
+                          </span>
                         </td>
                         <td className="px-3 py-2">
                           <SurfLevelBadge level={member.surf_level} />
@@ -716,7 +731,11 @@ export default function AttendancePage() {
                     {memberStats.map(({ member, count, total }) => (
                       <tr key={member.id} className="border-t border-line">
                         <td className="px-3 py-2 font-medium">
-                          {member.full_name || "未填姓名"}
+                          <span translate="no">
+                          <span translate="no">
+                            {member.full_name || "未填姓名"}
+                          </span>
+                          </span>
                         </td>
                         <td className="px-3 py-2">
                           <SurfLevelBadge level={member.surf_level} />

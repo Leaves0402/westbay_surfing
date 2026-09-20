@@ -1,4 +1,5 @@
 import { parseTaipeiDateTime } from "@/lib/taipeiTime";
+import { localeForIntl, type AppLocale } from "@/lib/i18n";
 
 export function formatTime(timeString: string) {
   return timeString.slice(0, 5);
@@ -25,19 +26,26 @@ export function addHoursToTime(timeString: string, hours: number) {
   return `${String(nextHour).padStart(2, "0")}:${String(nextMinute).padStart(2, "0")}`;
 }
 
-export function formatLessonDate(dateString: string) {
-  return new Date(`${dateString}T00:00:00+08:00`).toLocaleDateString("zh-TW", {
+export function formatLessonDate(
+  dateString: string,
+  locale: AppLocale = "zh-Hant"
+) {
+  return new Date(`${dateString}T00:00:00+08:00`).toLocaleDateString(
+    localeForIntl(locale),
+    {
     timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  });
+    }
+  );
 }
 
 export function formatLessonLabel(
   lessonDate: string,
   startTime: string,
-  endTime: string
+  endTime: string,
+  locale: AppLocale = "zh-Hant"
 ) {
-  return `${formatLessonDate(lessonDate)} ${formatTime(startTime)}–${formatTime(endTime)}`;
+  return `${formatLessonDate(lessonDate, locale)} ${formatTime(startTime)}–${formatTime(endTime)}`;
 }

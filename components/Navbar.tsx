@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { Menu, Waves } from "lucide-react";
 import { AppDrawer } from "@/components/navigation/AppDrawer";
+import { useLanguage } from "@/components/LanguageProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { getRoleTone } from "@/lib/badgeTones";
@@ -35,6 +36,7 @@ export function Navbar({
   onLogout,
   variant = "solid",
 }: NavbarProps) {
+  const { isEnglish, toggleLocale, t } = useLanguage();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [hasScrolledPastHero, setHasScrolledPastHero] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -123,6 +125,19 @@ export function Navbar({
           </div>
 
           <div className="flex shrink-0 items-center gap-2 text-sm">
+            <button
+              type="button"
+              onClick={toggleLocale}
+              aria-label={isEnglish ? "切換成中文" : "切換成英文"}
+              title={isEnglish ? "切換成中文" : "切換成英文"}
+              className={`inline-flex h-10 min-w-10 items-center justify-center rounded-xl border px-2.5 text-xs font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                isTransparent
+                  ? "border-white/35 bg-white/15 text-white hover:bg-white/25"
+                  : "border-border bg-surface text-slate-700 hover:bg-bg"
+              }`}
+            >
+              {isEnglish ? "中" : "EN"}
+            </button>
             {user ? (
               <>
                 {profile && (
@@ -138,7 +153,7 @@ export function Navbar({
                       isTransparent ? "text-white" : "text-text-primary"
                     }`}
                   >
-                    {profile?.full_name || user.email}
+                    <span translate="no">{profile?.full_name || user.email}</span>
                   </p>
                   {profile && (
                     <p className="mt-0.5">
@@ -158,7 +173,7 @@ export function Navbar({
                   onClick={() => void onLogout()}
                   disabled={isLoading}
                 >
-                  登出
+                  {t("登出")}
                 </Button>
               </>
             ) : (
@@ -167,7 +182,7 @@ export function Navbar({
                 onClick={() => void onLogin()}
                 disabled={isLoading}
               >
-                Google 登入
+                {t("Google 登入")}
               </Button>
             )}
           </div>

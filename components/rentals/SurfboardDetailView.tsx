@@ -34,7 +34,7 @@ export function SurfboardDetailView({
         <div>
           <dt className="text-xs text-slate-500">衝浪板名稱</dt>
           <dd className="mt-0.5 text-base font-semibold text-slate-900">
-            {board.name}
+            <span translate="no">{board.name}</span>
           </dd>
         </div>
 

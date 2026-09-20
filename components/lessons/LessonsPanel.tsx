@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BookOpen, Plus, RefreshCw } from "lucide-react";
+import { useLanguage } from "@/components/LanguageProvider";
 import { InstructorMultiSelect } from "@/components/lessons/InstructorMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -41,6 +42,7 @@ export function LessonsPanel({
   profile,
   onStatusMessage,
 }: LessonsPanelProps) {
+  const { locale } = useLanguage();
   const canManage = canManageLessons(profile);
   const [lessons, setLessons] = useState<LessonCardData[]>([]);
   const [instructors, setInstructors] = useState<PublicMemberProfile[]>([]);
@@ -434,7 +436,8 @@ export function LessonsPanel({
                       {formatLessonLabel(
                         lesson.lesson_date,
                         lesson.start_time,
-                        lesson.end_time
+                        lesson.end_time,
+                        locale
                       )}
                     </p>
                     {canManage && (
@@ -451,7 +454,7 @@ export function LessonsPanel({
                     )}
                   </div>
                   <p className="mt-1 text-sm text-text-secondary">
-                    教學：{instructorNames || "未指定"}
+                    教學：<span translate="no">{instructorNames || "未指定"}</span>
                   </p>
                   <p className="mt-1 text-sm text-text-secondary">
                     人數：{confirmed.length} / {lesson.capacity}
@@ -463,7 +466,7 @@ export function LessonsPanel({
                   )}
                   {lesson.note && (
                     <p className="mt-2 whitespace-pre-wrap text-sm text-text-secondary">
-                      備註：{lesson.note}
+                      備註：<span translate="no">{lesson.note}</span>
                     </p>
                   )}
 

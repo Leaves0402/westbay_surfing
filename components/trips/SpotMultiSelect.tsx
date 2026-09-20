@@ -127,7 +127,7 @@ export function SpotMultiSelect({
               key={spot.id}
               className="inline-flex items-center gap-1 rounded-full bg-primary-light px-2.5 py-1 text-xs font-medium text-primary"
             >
-              {formatSpotLabel(spot)}
+              <span translate="no">{formatSpotLabel(spot)}</span>
               <button
                 type="button"
                 aria-label={`移除 ${formatSpotLabel(spot)}`}
@@ -182,7 +182,7 @@ export function SpotMultiSelect({
                             className="h-4 w-4 rounded border-line text-primary focus:ring-2 focus:ring-primary"
                           />
                           <span className="text-text-primary">
-                            {formatSpotLabel(spot)}
+                            <span translate="no">{formatSpotLabel(spot)}</span>
                           </span>
                         </label>
                       </li>
