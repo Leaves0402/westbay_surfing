@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Info,
   Lock,
@@ -55,18 +55,13 @@ function AnnouncementSkeleton() {
 }
 
 function useObjectUrl(file: File | null) {
-  const [url, setUrl] = useState<string | null>(null);
+  const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
 
   useEffect(() => {
-    if (!file) {
-      setUrl(null);
-      return;
-    }
-
-    const nextUrl = URL.createObjectURL(file);
-    setUrl(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
-  }, [file]);
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [url]);
 
   return url;
 }

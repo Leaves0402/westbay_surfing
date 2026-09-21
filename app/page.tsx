@@ -81,7 +81,6 @@ export default function Home() {
         isLoading={isLoading}
         onLogin={handleGoogleLogin}
         onLogout={handleLogout}
-        variant="overlay"
       />
 
       <main className={`text-slate-950 ${editable ? "pt-14 sm:pt-12" : ""}`}>
