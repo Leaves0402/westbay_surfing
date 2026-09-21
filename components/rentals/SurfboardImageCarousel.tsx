@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
-import Image from "next/image";
 import { ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
 
 export type CarouselImage = {
@@ -75,7 +74,7 @@ export function SurfboardImageCarousel({
   return (
     <div className={className}>
       <div
-        className="relative aspect-square w-full overflow-hidden rounded-xl border border-border bg-bg"
+        className="relative flex min-h-64 w-full items-center justify-center overflow-hidden rounded-xl border border-border bg-bg md:min-h-80"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         role="group"
@@ -92,7 +91,7 @@ export function SurfboardImageCarousel({
             emptyLabel={emptyLabel}
           />
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-400">
+          <div className="flex min-h-64 w-full flex-col items-center justify-center gap-2 text-slate-400 md:min-h-80">
             <ImageOff size={28} strokeWidth={1.5} />
             <span className="text-xs">{emptyLabel}</span>
           </div>
@@ -157,7 +156,7 @@ function CarouselFrame({
 
   if (!image.url || hasFailed) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-400">
+      <div className="flex min-h-64 w-full flex-col items-center justify-center gap-2 text-slate-400 md:min-h-80">
         <ImageOff size={28} strokeWidth={1.5} />
         <span className="text-xs">
           {image.url ? "圖片載入失敗" : emptyLabel}
@@ -167,12 +166,11 @@ function CarouselFrame({
   }
 
   return (
-    <Image
+    /* eslint-disable-next-line @next/next/no-img-element -- 圖片尺寸由上傳檔案決定，需依原始長寬比排版 */
+    <img
       src={image.url}
       alt={image.alt}
-      fill
-      unoptimized
-      className="object-cover"
+      className="block h-auto max-h-[70vh] w-auto max-w-full object-contain"
       onError={() => setHasFailed(true)}
     />
   );

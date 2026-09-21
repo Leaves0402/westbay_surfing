@@ -55,7 +55,7 @@ export function SurfboardCard({
             alt={`衝浪板「${board.name}」的圖片`}
             fill
             unoptimized
-            className="object-cover transition-transform duration-200 group-hover:scale-105"
+            className="object-contain p-1 transition-transform duration-200 group-hover:scale-[1.03]"
             onError={() => setImageFailed(true)}
           />
         ) : (

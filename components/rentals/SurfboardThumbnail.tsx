@@ -28,7 +28,7 @@ export function SurfboardThumbnail({
           alt={`衝浪板「${boardName}」的圖片`}
           fill
           unoptimized
-          className="object-cover"
+          className="object-contain p-0.5"
           onError={() => setHasFailed(true)}
         />
       ) : (
