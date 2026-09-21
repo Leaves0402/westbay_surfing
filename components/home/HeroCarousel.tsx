@@ -88,8 +88,9 @@ export function HeroCarousel({
 
   return (
     <section
-      // 高度固定，切換照片不會造成版面跳動；底部露出下一區一小部分。
-      className="relative h-[82svh] min-h-[520px] w-full overflow-hidden bg-slate-900"
+      // 手機版讓照片維持原始 12:5 比例，避免橫向照片為了填滿直式 Hero
+      // 而裁掉大量左右內容；桌機版仍維持滿版 Hero。
+      className="relative w-full overflow-hidden bg-slate-900 sm:h-[82svh] sm:min-h-[520px]"
       aria-label="社團照片輪播"
       aria-roledescription="carousel"
       tabIndex={0}
@@ -99,105 +100,104 @@ export function HeroCarousel({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {slides.map((slide, index) => {
-        const isActive = index === activeIndex;
-        const hasFailed = failedSources[slide.url];
+      <div className="relative aspect-[12/5] w-full overflow-hidden sm:absolute sm:inset-0 sm:aspect-auto">
+        {slides.map((slide, index) => {
+          const isActive = index === activeIndex;
+          const hasFailed = failedSources[slide.url];
 
-        return (
-          <div
-            key={`${slide.url}-${index}`}
-            aria-hidden={!isActive}
-            className={`absolute inset-0 ${
-              prefersReducedMotion ? "" : "transition-opacity duration-700"
-            } ${
-              isActive ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            {hasFailed ? (
-              // 圖片載入失敗的穩定 fallback：純色背景，尺寸不變、文字不位移。
-              <div className="h-full w-full bg-primary-hover" />
-            ) : (
-              <Image
-                src={slide.url}
-                alt={slide.alt}
-                fill
-                preload={index === 0}
-                loading={index === 0 ? undefined : index === 1 ? "eager" : "lazy"}
-                fetchPriority={index === 0 ? "high" : "auto"}
-                unoptimized
-                sizes="100vw"
-                className="object-cover"
-                // 已有的 16:9 圖片在寬螢幕仍需要 object-cover，因此從頂端
-                // 對齊，確保編輯時保留的上緣不會再被裁掉。
-                style={{ objectPosition: `${slide.focalX}% top` }}
-                onError={() =>
-                  setFailedSources((current) => ({
-                    ...current,
-                    [slide.url]: true,
-                  }))
-                }
-              />
-            )}
-          </div>
-        );
-      })}
+          return (
+            <div
+              key={`${slide.url}-${index}`}
+              aria-hidden={!isActive}
+              className={`absolute inset-0 ${
+                prefersReducedMotion ? "" : "transition-opacity duration-700"
+              } ${isActive ? "opacity-100" : "opacity-0"}`}
+            >
+              {hasFailed ? (
+                // 圖片載入失敗的穩定 fallback：純色背景，尺寸不變、文字不位移。
+                <div className="h-full w-full bg-primary-hover" />
+              ) : (
+                <Image
+                  src={slide.url}
+                  alt={slide.alt}
+                  fill
+                  preload={index === 0}
+                  loading={index === 0 ? undefined : index === 1 ? "eager" : "lazy"}
+                  fetchPriority={index === 0 ? "high" : "auto"}
+                  unoptimized
+                  sizes="100vw"
+                  className="object-contain sm:object-cover"
+                  // 手機顯示完整照片；寬螢幕才套用可編輯的水平焦點。
+                  style={{ objectPosition: `${slide.focalX}% top` }}
+                  onError={() =>
+                    setFailedSources((current) => ({
+                      ...current,
+                      [slide.url]: true,
+                    }))
+                  }
+                />
+              )}
+            </div>
+          );
+        })}
 
-      {/* 遮罩確保文字對比度足夠 */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/35 to-black/65"
-      />
+        {/* 手機文字移到照片下方；桌機保留原本的深色遮罩。 */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-black/15 sm:bg-gradient-to-b sm:from-black/55 sm:via-black/35 sm:to-black/65"
+        />
 
-      <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-center px-4 pb-16 pt-20 sm:px-6">
-        {children}
+        {hasMultipleSlides && (
+          <>
+            <button
+              type="button"
+              aria-label="上一張照片"
+              title="上一張照片"
+              onClick={() => {
+                setIsPaused(true);
+                goTo(activeIndex - 1);
+              }}
+              className="absolute left-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 sm:left-4"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              type="button"
+              aria-label="下一張照片"
+              title="下一張照片"
+              onClick={() => {
+                setIsPaused(true);
+                goTo(activeIndex + 1);
+              }}
+              className="absolute right-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 sm:right-4"
+            >
+              <ChevronRight size={20} />
+            </button>
+
+            <div className="absolute inset-x-0 bottom-3 z-20 flex items-center justify-center gap-2.5 sm:bottom-5">
+              {slides.map((slide, index) => (
+                <button
+                  key={`${slide.url}-dot-${index}`}
+                  type="button"
+                  aria-label={`切換到第 ${index + 1} 張照片`}
+                  aria-current={index === activeIndex}
+                  onClick={() => {
+                    setIsPaused(true);
+                    setActiveIndex(index);
+                  }}
+                  className={`h-2.5 w-2.5 rounded-full border border-white/70 transition-colors ${
+                    index === activeIndex ? "bg-white" : "bg-white/25"
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      {hasMultipleSlides && (
-        <>
-          <button
-            type="button"
-            aria-label="上一張照片"
-            title="上一張照片"
-            onClick={() => {
-              setIsPaused(true);
-              goTo(activeIndex - 1);
-            }}
-            className="absolute left-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 sm:left-4"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            type="button"
-            aria-label="下一張照片"
-            title="下一張照片"
-            onClick={() => {
-              setIsPaused(true);
-              goTo(activeIndex + 1);
-            }}
-            className="absolute right-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 sm:right-4"
-          >
-            <ChevronRight size={20} />
-          </button>
-
-          <div className="absolute inset-x-0 bottom-5 z-20 flex items-center justify-center gap-2.5">
-            {slides.map((slide, index) => (
-              <button
-                key={`${slide.url}-dot-${index}`}
-                type="button"
-                aria-label={`切換到第 ${index + 1} 張照片`}
-                aria-current={index === activeIndex}
-                onClick={() => {
-                  setIsPaused(true);
-                  setActiveIndex(index);
-                }}
-                className={`h-2.5 w-2.5 rounded-full border border-white/70 transition-colors ${
-                  index === activeIndex ? "bg-white" : "bg-white/25"
-                }`}
-              />
-            ))}
-          </div>
-        </>
-      )}
+      <div className="relative z-10 mx-auto flex max-w-6xl flex-col px-4 py-8 sm:h-full sm:justify-center sm:px-6 sm:pb-16 sm:pt-20">
+        {children}
+      </div>
     </section>
   );
 }

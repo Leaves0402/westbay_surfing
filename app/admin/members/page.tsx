@@ -686,10 +686,10 @@ export default function MembersAdminPage() {
                   找不到符合條件的社員。
                 </p>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-line">
+                <div className="max-h-[26.75rem] overflow-auto rounded-xl border border-line">
                   <table className="w-full table-fixed border-collapse text-left text-xs md:text-sm">
-                    <thead>
-                      <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
+                    <thead className="sticky top-0 z-10 bg-appBg">
+                      <tr className="h-9 border-b border-line text-xs text-text-secondary">
                         {isBatchRemoveMode && (
                           <th className="w-10 px-2 py-1.5 md:w-12 md:px-3 md:py-2" />
                         )}
@@ -718,7 +718,7 @@ export default function MembersAdminPage() {
                         return (
                           <tr
                             key={member.id}
-                            className="border-b border-line last:border-b-0"
+                            className="h-14 border-b border-line bg-surface last:border-b-0"
                           >
                             {isBatchRemoveMode && (
                               <td className="px-2 py-2 md:px-3">
