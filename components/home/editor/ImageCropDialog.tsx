@@ -26,7 +26,7 @@ export type CropDialogResult = {
 };
 
 const kindLabels: Record<ImageOutputKind, string> = {
-  hero: "Hero 輪播圖（16:9）",
+  hero: "Hero 輪播圖（寬幅 12:5）",
   banner: "中段背景圖（2:1）",
   footer: "頁尾背景圖（2:1）",
   officer: "幹部照片（4:5）",

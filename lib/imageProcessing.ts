@@ -28,7 +28,9 @@ export type ImageOutputSpec = {
 
 /** 各區塊的輸出規格（裁切比例＝width / height）。 */
 export const imageOutputSpecs = {
-  hero: { width: 2400, height: 1350, quality: 0.82 },
+  // Hero 在首頁是寬幅橫幅；用 12:5 裁切可避免桌機版 object-cover
+  // 再次裁掉上下，窄螢幕則只會根據焦點裁掉左右。
+  hero: { width: 2400, height: 1000, quality: 0.82 },
   banner: { width: 2400, height: 1200, quality: 0.82 },
   footer: { width: 2400, height: 1200, quality: 0.82 },
   officer: { width: 1000, height: 1250, quality: 0.85 },

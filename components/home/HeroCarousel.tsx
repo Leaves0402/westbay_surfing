@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { toObjectPosition, type HomepageImage } from "@/lib/homepage";
+import type { HomepageImage } from "@/lib/homepage";
 
 const AUTOPLAY_INTERVAL_MS = 7000;
 const SWIPE_THRESHOLD_PX = 48;
@@ -127,7 +127,9 @@ export function HeroCarousel({
                 unoptimized
                 sizes="100vw"
                 className="object-cover"
-                style={{ objectPosition: toObjectPosition(slide) }}
+                // 已有的 16:9 圖片在寬螢幕仍需要 object-cover，因此從頂端
+                // 對齊，確保編輯時保留的上緣不會再被裁掉。
+                style={{ objectPosition: `${slide.focalX}% top` }}
                 onError={() =>
                   setFailedSources((current) => ({
                     ...current,
