@@ -40,6 +40,7 @@ export type Announcement = {
   id: string;
   title: string;
   content: string;
+  image_path: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

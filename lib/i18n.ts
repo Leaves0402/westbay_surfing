@@ -208,6 +208,13 @@ const englishUiText: Record<string, string> = {
   "目前沒有公告。": "No announcements yet.",
   "公告標題": "Announcement title",
   "公告內容": "Announcement content",
+  "公告照片（選填）": "Announcement photo (optional)",
+  "新增照片": "Add photo",
+  "更換照片": "Replace photo",
+  "移除照片": "Remove photo",
+  "公告照片預覽": "Announcement photo preview",
+  "支援 JPG、PNG、WebP 與 GIF，每張最大 5 MB。":
+    "JPG, PNG, WebP and GIF are supported, up to 5 MB per image.",
   "發布公告": "Publish Announcement",
   "更新公告": "Update Announcement",
   "發布中...": "Publishing...",

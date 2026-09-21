@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import {
   Info,
@@ -13,10 +14,16 @@ import {
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useLanguage } from "@/components/LanguageProvider";
+import { AnnouncementImageField } from "@/components/announcements/AnnouncementImageField";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { localeForIntl, type AppLocale } from "@/lib/i18n";
+import {
+  createSignedAnnouncementImageUrls,
+  removeAnnouncementImages,
+  uploadAnnouncementImage,
+} from "@/lib/announcements";
 import {
   canManageAnnouncements,
   canViewAnnouncements,
@@ -47,6 +54,23 @@ function AnnouncementSkeleton() {
   );
 }
 
+function useObjectUrl(file: File | null) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setUrl(null);
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(file);
+    setUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [file]);
+
+  return url;
+}
+
 export default function AnnouncementsPage() {
   const { locale } = useLanguage();
   const {
@@ -64,12 +88,22 @@ export default function AnnouncementsPage() {
   const [isCreatingAnnouncement, setIsCreatingAnnouncement] = useState(false);
   const [newAnnouncementTitle, setNewAnnouncementTitle] = useState("");
   const [newAnnouncementContent, setNewAnnouncementContent] = useState("");
+  const [newAnnouncementImage, setNewAnnouncementImage] =
+    useState<File | null>(null);
+  const newAnnouncementImageUrl = useObjectUrl(newAnnouncementImage);
+  const [announcementImageUrls, setAnnouncementImageUrls] = useState<
+    Record<string, string>
+  >({});
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<
     string | null
   >(null);
   const [editingAnnouncementTitle, setEditingAnnouncementTitle] = useState("");
   const [editingAnnouncementContent, setEditingAnnouncementContent] =
     useState("");
+  const [editingAnnouncementImage, setEditingAnnouncementImage] =
+    useState<File | null>(null);
+  const editingAnnouncementImageUrl = useObjectUrl(editingAnnouncementImage);
+  const [isEditingImageRemoved, setIsEditingImageRemoved] = useState(false);
   const [updatingAnnouncementId, setUpdatingAnnouncementId] = useState<
     string | null
   >(null);
@@ -87,7 +121,9 @@ export default function AnnouncementsPage() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("announcements")
-      .select("id, title, content, created_by, created_at, updated_at")
+      .select(
+        "id, title, content, image_path, created_by, created_at, updated_at"
+      )
       .order("created_at", { ascending: false });
 
     setIsLoadingAnnouncements(false);
@@ -97,7 +133,17 @@ export default function AnnouncementsPage() {
       return;
     }
 
-    setAnnouncements((data ?? []) as Announcement[]);
+    const loadedAnnouncements = (data ?? []) as Announcement[];
+    setAnnouncements(loadedAnnouncements);
+
+    const paths = loadedAnnouncements.flatMap((announcement) =>
+      announcement.image_path ? [announcement.image_path] : []
+    );
+    const signedUrlsResult = await createSignedAnnouncementImageUrls(paths);
+    setAnnouncementImageUrls(signedUrlsResult.urls);
+    if (signedUrlsResult.error) {
+      setStatusMessage(`讀取公告照片失敗：${signedUrlsResult.error}`);
+    }
     void markNavigationChannelRead("announcements");
   }, [setStatusMessage]);
 
@@ -131,21 +177,45 @@ export default function AnnouncementsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
+    const announcementId = crypto.randomUUID();
+    let uploadedImagePath: string | null = null;
+
+    if (newAnnouncementImage) {
+      const uploadResult = await uploadAnnouncementImage(
+        announcementId,
+        newAnnouncementImage
+      );
+      if (uploadResult.error || !uploadResult.path) {
+        setIsCreatingAnnouncement(false);
+        setStatusMessage(
+          `上傳公告照片失敗：${uploadResult.error ?? "未知錯誤"}`
+        );
+        return;
+      }
+      uploadedImagePath = uploadResult.path;
+    }
+
     const { error } = await supabase.from("announcements").insert({
+      id: announcementId,
       title: newAnnouncementTitle.trim(),
       content: newAnnouncementContent.trim(),
+      image_path: uploadedImagePath,
       created_by: user.id,
     });
 
     setIsCreatingAnnouncement(false);
 
     if (error) {
+      if (uploadedImagePath) {
+        await removeAnnouncementImages([uploadedImagePath]);
+      }
       setStatusMessage(`新增公告失敗：${error.message}`);
       return;
     }
 
     setNewAnnouncementTitle("");
     setNewAnnouncementContent("");
+    setNewAnnouncementImage(null);
     setStatusMessage("公告已新增。");
     await loadAnnouncements();
   };
@@ -154,6 +224,8 @@ export default function AnnouncementsPage() {
     setEditingAnnouncementId(announcement.id);
     setEditingAnnouncementTitle(announcement.title);
     setEditingAnnouncementContent(announcement.content);
+    setEditingAnnouncementImage(null);
+    setIsEditingImageRemoved(false);
     setStatusMessage("");
   };
 
@@ -161,6 +233,8 @@ export default function AnnouncementsPage() {
     setEditingAnnouncementId(null);
     setEditingAnnouncementTitle("");
     setEditingAnnouncementContent("");
+    setEditingAnnouncementImage(null);
+    setIsEditingImageRemoved(false);
   };
 
   const handleUpdateAnnouncement = async (announcementId: string) => {
@@ -183,11 +257,38 @@ export default function AnnouncementsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
+    const announcement = announcements.find(
+      (item) => item.id === announcementId
+    );
+    const oldImagePath = announcement?.image_path ?? null;
+    let uploadedImagePath: string | null = null;
+
+    if (editingAnnouncementImage) {
+      const uploadResult = await uploadAnnouncementImage(
+        announcementId,
+        editingAnnouncementImage
+      );
+      if (uploadResult.error || !uploadResult.path) {
+        setUpdatingAnnouncementId(null);
+        setStatusMessage(
+          `上傳公告照片失敗：${uploadResult.error ?? "未知錯誤"}`
+        );
+        return;
+      }
+      uploadedImagePath = uploadResult.path;
+    }
+
+    const nextImagePath = uploadedImagePath
+      ? uploadedImagePath
+      : isEditingImageRemoved
+        ? null
+        : oldImagePath;
     const { error } = await supabase
       .from("announcements")
       .update({
         title: editingAnnouncementTitle.trim(),
         content: editingAnnouncementContent.trim(),
+        image_path: nextImagePath,
         updated_at: new Date().toISOString(),
       })
       .eq("id", announcementId);
@@ -195,8 +296,23 @@ export default function AnnouncementsPage() {
     setUpdatingAnnouncementId(null);
 
     if (error) {
+      if (uploadedImagePath) {
+        await removeAnnouncementImages([uploadedImagePath]);
+      }
       setStatusMessage(`更新公告失敗：${error.message}`);
       return;
+    }
+
+    if (oldImagePath && oldImagePath !== nextImagePath) {
+      const cleanupError = await removeAnnouncementImages([oldImagePath]);
+      if (cleanupError) {
+        setStatusMessage(
+          `公告已更新，但舊照片清理失敗：${cleanupError}`
+        );
+        cancelEditAnnouncement();
+        await loadAnnouncements();
+        return;
+      }
     }
 
     cancelEditAnnouncement();
@@ -217,6 +333,9 @@ export default function AnnouncementsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
+    const imagePath =
+      announcements.find((item) => item.id === announcementId)?.image_path ??
+      null;
     const { error } = await supabase
       .from("announcements")
       .delete()
@@ -227,6 +346,17 @@ export default function AnnouncementsPage() {
     if (error) {
       setStatusMessage(`刪除公告失敗：${error.message}`);
       return;
+    }
+
+    if (imagePath) {
+      const cleanupError = await removeAnnouncementImages([imagePath]);
+      if (cleanupError) {
+        setStatusMessage(
+          `公告已刪除，但照片清理失敗：${cleanupError}`
+        );
+        await loadAnnouncements();
+        return;
+      }
     }
 
     setStatusMessage("公告已刪除。");
@@ -322,6 +452,15 @@ export default function AnnouncementsPage() {
                       placeholder="公告內容"
                     />
                   </FormField>
+                  <FormField label="公告照片（選填）">
+                    <AnnouncementImageField
+                      file={newAnnouncementImage}
+                      previewUrl={newAnnouncementImageUrl}
+                      disabled={isCreatingAnnouncement}
+                      onChange={setNewAnnouncementImage}
+                      onError={setStatusMessage}
+                    />
+                  </FormField>
                 </div>
 
                 <Button
@@ -398,6 +537,31 @@ export default function AnnouncementsPage() {
                               className={`min-h-28 ${fieldControlClasses}`}
                             />
                           </FormField>
+                          <FormField label="公告照片（選填）">
+                            <AnnouncementImageField
+                              file={editingAnnouncementImage}
+                              previewUrl={editingAnnouncementImageUrl}
+                              existingImageUrl={
+                                announcement.image_path
+                                  ? announcementImageUrls[
+                                      announcement.image_path
+                                    ] ?? null
+                                  : null
+                              }
+                              isExistingImageRemoved={isEditingImageRemoved}
+                              disabled={
+                                updatingAnnouncementId === announcement.id
+                              }
+                              onChange={(file) => {
+                                setEditingAnnouncementImage(file);
+                                if (file) setIsEditingImageRemoved(false);
+                              }}
+                              onRemoveExisting={() =>
+                                setIsEditingImageRemoved(true)
+                              }
+                              onError={setStatusMessage}
+                            />
+                          </FormField>
                           <div className="flex flex-wrap gap-2">
                             <Button
                               variant="primary"
@@ -465,6 +629,22 @@ export default function AnnouncementsPage() {
                           <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-text-primary/80">
                             <span translate="no">{announcement.content}</span>
                           </p>
+                          {announcement.image_path &&
+                            announcementImageUrls[announcement.image_path] && (
+                              <div className="relative mt-4 aspect-[16/9] w-full overflow-hidden rounded-xl border border-line bg-appBg">
+                                <Image
+                                  src={
+                                    announcementImageUrls[
+                                      announcement.image_path
+                                    ]
+                                  }
+                                  alt={`${announcement.title} 公告照片`}
+                                  fill
+                                  unoptimized
+                                  className="object-contain"
+                                />
+                              </div>
+                            )}
                         </>
                       )}
                     </Card>

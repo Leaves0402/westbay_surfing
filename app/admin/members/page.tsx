@@ -9,6 +9,7 @@ import {
   Lock,
   RefreshCw,
   Search,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -76,6 +77,9 @@ export default function MembersAdminPage() {
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [savingRoleUserId, setSavingRoleUserId] = useState<string | null>(null);
   const [isApprovingPending, setIsApprovingPending] = useState(false);
+  const [rejectingPendingUserId, setRejectingPendingUserId] = useState<
+    string | null
+  >(null);
   const [reviewingSurfLevelUserId, setReviewingSurfLevelUserId] = useState<
     string | null
   >(null);
@@ -378,6 +382,40 @@ export default function MembersAdminPage() {
     }
 
     setStatusMessage(`已審核通過 ${targetIds.length} 位待審核社員。`);
+    await loadMembers();
+  };
+
+  const handleRejectPendingMember = async (member: Profile) => {
+    if (!canReviewPending) {
+      setStatusMessage("只有幹部與管理員可以刪除待審核申請。");
+      return;
+    }
+
+    const displayName = member.full_name || member.email;
+    if (
+      !window.confirm(
+        `確定要拒絕並刪除 ${displayName} 的入社申請嗎？`
+      )
+    ) {
+      return;
+    }
+
+    setRejectingPendingUserId(member.id);
+    setStatusMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("reject_pending_member", {
+      target_user_id: member.id,
+    });
+
+    setRejectingPendingUserId(null);
+
+    if (error) {
+      setStatusMessage(`刪除待審核申請失敗：${error.message}`);
+      return;
+    }
+
+    setStatusMessage("已拒絕並刪除這筆入社申請。");
     await loadMembers();
   };
 
@@ -842,6 +880,9 @@ export default function MembersAdminPage() {
                             <th className="px-3 py-2 font-medium">學號</th>
                             <th className="px-3 py-2 font-medium">Email</th>
                             <th className="px-3 py-2 font-medium">衝浪程度</th>
+                            <th className="px-3 py-2 text-right font-medium">
+                              操作
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -874,6 +915,24 @@ export default function MembersAdminPage() {
                               <td className="px-3 py-3">
                                 <SurfLevelBadge level={member.surf_level} />
                               </td>
+                              <td className="px-3 py-3 text-right">
+                                <Button
+                                  variant="danger"
+                                  className="!min-h-9 !px-3 !text-sm"
+                                  icon={<Trash2 size={15} />}
+                                  onClick={() =>
+                                    void handleRejectPendingMember(member)
+                                  }
+                                  disabled={
+                                    rejectingPendingUserId === member.id ||
+                                    isApprovingPending
+                                  }
+                                >
+                                  {rejectingPendingUserId === member.id
+                                    ? "刪除中..."
+                                    : "刪除"}
+                                </Button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -882,17 +941,18 @@ export default function MembersAdminPage() {
 
                     <div className="grid gap-3 md:hidden">
                       {filteredPendingMembers.map((member) => (
-                        <label
+                        <div
                           key={member.id}
                           className="flex min-h-11 items-start gap-3 rounded-xl border border-line bg-appBg p-3"
                         >
                           <input
+                            aria-label={`選取 ${member.full_name || member.email}`}
                             type="checkbox"
                             checked={selectedPendingIds.has(member.id)}
                             onChange={() => togglePendingSelection(member.id)}
                             className="mt-0.5 h-4 w-4 shrink-0 rounded border-line text-primary focus:ring-2 focus:ring-primary"
                           />
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="font-medium text-text-primary">
                               <span translate="no">
                                 {member.full_name || "未填姓名"}
@@ -908,7 +968,21 @@ export default function MembersAdminPage() {
                               <SurfLevelBadge level={member.surf_level} />
                             </div>
                           </div>
-                        </label>
+                          <Button
+                            variant="danger"
+                            className="!min-h-9 shrink-0 !px-3 !text-sm"
+                            icon={<Trash2 size={15} />}
+                            onClick={() => void handleRejectPendingMember(member)}
+                            disabled={
+                              rejectingPendingUserId === member.id ||
+                              isApprovingPending
+                            }
+                          >
+                            {rejectingPendingUserId === member.id
+                              ? "刪除中..."
+                              : "刪除"}
+                          </Button>
+                        </div>
                       ))}
                     </div>
 
