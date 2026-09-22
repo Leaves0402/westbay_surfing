@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
+  Download,
   Gauge,
   Info,
   ListChecks,
@@ -30,6 +31,7 @@ import {
   compareSurfLevelsDescending,
 } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
+import { getTaipeiDate } from "@/lib/taipeiTime";
 import {
   officialMemberRoleOptions,
   profileSelectColumns,
@@ -157,6 +159,33 @@ export default function MembersAdminPage() {
     setIsBatchRemoveMode(false);
     setSelectedMemberIds(new Set());
   }, []);
+
+  const handleExportMembers = useCallback(() => {
+    if (!canManage || sortedOfficialMembers.length === 0) return;
+
+    const escapeCsvCell = (value: string) =>
+      `"${value.replaceAll('"', '""')}"`;
+    const rows = [
+      ["姓名", "學號", "職位"],
+      ...sortedOfficialMembers.map((member) => [
+        member.full_name?.trim() || "N/A",
+        member.student_id?.trim() || "N/A",
+        roleLabels[member.role],
+      ]),
+    ];
+    const csv = `\uFEFF${rows
+      .map((row) => row.map(escapeCsvCell).join(","))
+      .join("\r\n")}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `西灣衝浪社社員名單-${getTaipeiDate()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
+  }, [canManage, sortedOfficialMembers]);
 
   const loadMembers = useCallback(async () => {
     setIsLoadingMembers(true);
@@ -628,6 +657,16 @@ export default function MembersAdminPage() {
                   </div>
                   {canManage && (
                     <>
+                      <Button
+                        variant="outline"
+                        className="shrink-0 !min-h-10 !px-3 !text-sm"
+                        icon={<Download size={16} />}
+                        onClick={handleExportMembers}
+                        disabled={sortedOfficialMembers.length === 0}
+                        title="匯出姓名、學號與職位"
+                      >
+                        匯出 CSV
+                      </Button>
                       {isBatchRemoveMode && (
                         <button
                           type="button"
@@ -871,10 +910,10 @@ export default function MembersAdminPage() {
                   </p>
                 ) : (
                   <>
-                    <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
+                    <div className="hidden max-h-[24.75rem] overflow-auto rounded-xl border border-line md:block">
                       <table className="w-full border-collapse text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
+                        <thead className="sticky top-0 z-10 bg-appBg">
+                          <tr className="h-9 border-b border-line text-xs text-text-secondary">
                             <th className="px-3 py-2 font-medium">核准</th>
                             <th className="px-3 py-2 font-medium">姓名</th>
                             <th className="px-3 py-2 font-medium">學號</th>
@@ -889,7 +928,7 @@ export default function MembersAdminPage() {
                           {filteredPendingMembers.map((member) => (
                             <tr
                               key={member.id}
-                              className="border-b border-line last:border-b-0"
+                              className="h-[3.75rem] border-b border-line bg-surface last:border-b-0"
                             >
                               <td className="px-3 py-3">
                                 <input
@@ -939,7 +978,7 @@ export default function MembersAdminPage() {
                       </table>
                     </div>
 
-                    <div className="grid gap-3 md:hidden">
+                    <div className="grid max-h-[48.75rem] gap-3 overflow-y-auto pr-1 md:hidden">
                       {filteredPendingMembers.map((member) => (
                         <div
                           key={member.id}
@@ -1022,10 +1061,10 @@ export default function MembersAdminPage() {
                   </p>
                 ) : (
                   <>
-                    <div className="hidden overflow-x-auto rounded-xl border border-line md:block">
+                    <div className="hidden max-h-[13.5rem] overflow-auto rounded-xl border border-line md:block">
                       <table className="w-full border-collapse text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-line bg-appBg text-xs text-text-secondary">
+                        <thead className="sticky top-0 z-10 bg-appBg">
+                          <tr className="h-9 border-b border-line text-xs text-text-secondary">
                             <th className="px-3 py-2 font-medium">姓名</th>
                             <th className="px-3 py-2 font-medium">學號</th>
                             <th className="px-3 py-2 font-medium">目前程度</th>
@@ -1037,7 +1076,7 @@ export default function MembersAdminPage() {
                           {surfLevelRequests.map((member) => (
                             <tr
                               key={member.id}
-                              className="border-b border-line last:border-b-0"
+                              className="h-[3.75rem] border-b border-line bg-surface last:border-b-0"
                             >
                               <td className="px-3 py-3 font-medium text-text-primary">
                                 <span translate="no">
@@ -1107,7 +1146,7 @@ export default function MembersAdminPage() {
                       </table>
                     </div>
 
-                    <div className="grid gap-3 md:hidden">
+                    <div className="grid max-h-[26.25rem] gap-3 overflow-y-auto pr-1 md:hidden">
                       {surfLevelRequests.map((member) => (
                         <div
                           key={member.id}
