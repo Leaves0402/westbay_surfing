@@ -52,6 +52,23 @@ function RowSkeleton() {
   );
 }
 
+function downloadCsv(filename: string, rows: string[][]) {
+  const escapeCsvCell = (value: string) =>
+    `"${value.replaceAll('"', '""')}"`;
+  const csv = `\uFEFF${rows
+    .map((row) => row.map(escapeCsvCell).join(","))
+    .join("\r\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(downloadUrl);
+}
+
 export default function MembersAdminPage() {
   const {
     user,
@@ -163,8 +180,6 @@ export default function MembersAdminPage() {
   const handleExportMembers = useCallback(() => {
     if (!canManage || sortedOfficialMembers.length === 0) return;
 
-    const escapeCsvCell = (value: string) =>
-      `"${value.replaceAll('"', '""')}"`;
     const rows = [
       ["姓名", "學號", "職位"],
       ...sortedOfficialMembers.map((member) => [
@@ -173,19 +188,23 @@ export default function MembersAdminPage() {
         roleLabels[member.role],
       ]),
     ];
-    const csv = `\uFEFF${rows
-      .map((row) => row.map(escapeCsvCell).join(","))
-      .join("\r\n")}`;
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const downloadUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = `西灣衝浪社社員名單-${getTaipeiDate()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(downloadUrl);
+    downloadCsv(`西灣衝浪社社員名單-${getTaipeiDate()}.csv`, rows);
   }, [canManage, sortedOfficialMembers]);
+
+  const handleExportPendingMembers = useCallback(() => {
+    if (!canReviewPending || pendingMembers.length === 0) return;
+
+    const rows = [
+      ["姓名", "學號", "Email", "衝浪程度"],
+      ...pendingMembers.map((member) => [
+        member.full_name?.trim() || "N/A",
+        member.student_id?.trim() || "N/A",
+        member.email?.trim() || "N/A",
+        member.surf_level || "N/A",
+      ]),
+    ];
+    downloadCsv(`西灣衝浪社待審核名單-${getTaipeiDate()}.csv`, rows);
+  }, [canReviewPending, pendingMembers]);
 
   const loadMembers = useCallback(async () => {
     setIsLoadingMembers(true);
@@ -881,6 +900,16 @@ export default function MembersAdminPage() {
                         className={`${fieldControlClasses} min-h-9 py-1.5 pl-8 text-sm`}
                       />
                     </div>
+                    <Button
+                      variant="outline"
+                      className="shrink-0 !min-h-9 !px-3 !text-sm"
+                      icon={<Download size={16} />}
+                      onClick={handleExportPendingMembers}
+                      disabled={pendingMembers.length === 0}
+                      title="匯出待審核社員資料"
+                    >
+                      匯出 CSV
+                    </Button>
                     <Button
                       variant="primary"
                       className="shrink-0 !min-h-9 !px-3 !text-sm"
