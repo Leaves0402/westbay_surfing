@@ -1,2 +1,8 @@
 [functions.line-webhook]
 verify_jwt = false
+
+[functions.send-line-notification]
+verify_jwt = true
+
+[functions.send-line-notification]
+verify_jwt = true

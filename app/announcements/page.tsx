@@ -28,6 +28,7 @@ import {
   canManageAnnouncements,
   canViewAnnouncements,
 } from "@/lib/permissions";
+import { sendLineNotification } from "@/lib/lineNotifications";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement } from "@/lib/types";
 import { useAuthProfile } from "@/lib/useAuthProfile";
@@ -198,9 +199,8 @@ export default function AnnouncementsPage() {
       created_by: user.id,
     });
 
-    setIsCreatingAnnouncement(false);
-
     if (error) {
+      setIsCreatingAnnouncement(false);
       if (uploadedImagePath) {
         await removeAnnouncementImages([uploadedImagePath]);
       }
@@ -208,11 +208,20 @@ export default function AnnouncementsPage() {
       return;
     }
 
+    const lineError = await sendLineNotification(
+      "announcement",
+      announcementId
+    );
+    setIsCreatingAnnouncement(false);
     setNewAnnouncementTitle("");
     setNewAnnouncementContent("");
     setNewAnnouncementImage(null);
-    setStatusMessage("公告已新增。");
     await loadAnnouncements();
+    setStatusMessage(
+      lineError
+        ? "公告已新增，但 LINE 通知發送失敗。"
+        : "公告已新增，LINE 通知已發送。"
+    );
   };
 
   const startEditAnnouncement = (announcement: Announcement) => {

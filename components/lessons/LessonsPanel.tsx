@@ -18,6 +18,7 @@ import {
   isLessonCancellationLocked,
   parseLessonRegistrationDeadline,
 } from "@/lib/lessonTime";
+import { sendLineNotification } from "@/lib/lineNotifications";
 import { canManageLessons } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import { getTaipeiDate } from "@/lib/taipeiTime";
@@ -223,7 +224,7 @@ export function LessonsPanel({
     onStatusMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase.rpc("create_lesson", {
+    const { data: createdLesson, error } = await supabase.rpc("create_lesson", {
       target_lesson_date: lessonDate,
       target_start_time: startTime,
       target_end_time: endTime,
@@ -234,16 +235,24 @@ export function LessonsPanel({
       target_registration_deadline: registrationDeadlineDate.toISOString(),
     });
 
-    setIsCreating(false);
-
     if (error) {
+      setIsCreating(false);
       onStatusMessage(`新增社課失敗：${error.message}`);
       return;
     }
 
+    const lessonId = (createdLesson as { id?: string } | null)?.id;
+    const lineError = lessonId
+      ? await sendLineNotification("lesson", lessonId)
+      : "missing lesson id";
+    setIsCreating(false);
     resetForm();
-    onStatusMessage("社課已新增。");
     await loadLessons();
+    onStatusMessage(
+      lineError
+        ? "社課已新增，但 LINE 通知發送失敗。"
+        : "社課已新增，LINE 通知已發送。"
+    );
   };
 
   const handleJoin = async (lessonId: string) => {

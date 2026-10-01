@@ -26,6 +26,7 @@ import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { getRoleTone } from "@/lib/badgeTones";
 import { localeForIntl, type AppLocale } from "@/lib/i18n";
+import { sendLineNotification } from "@/lib/lineNotifications";
 import {
   canCreateSurfTrips,
   canViewSurfTrips,
@@ -409,7 +410,7 @@ export default function TripsPage() {
     setStatusMessage("");
 
     const supabase = createClient();
-    const { error: tripError } = await supabase.rpc("create_surf_trip", {
+    const { data: createdTrip, error: tripError } = await supabase.rpc("create_surf_trip", {
       target_start_date: startDate,
       target_end_date: endDate,
       target_capacity: capacityValue,
@@ -418,16 +419,24 @@ export default function TripsPage() {
       target_spot_ids: selectedSpotIds,
     });
 
-    setIsCreatingTrip(false);
-
     if (tripError) {
+      setIsCreatingTrip(false);
       setStatusMessage(`新增外衝失敗：${tripError.message}`);
       return;
     }
 
+    const tripId = (createdTrip as { id?: string } | null)?.id;
+    const lineError = tripId
+      ? await sendLineNotification("trip", tripId)
+      : "missing trip id";
+    setIsCreatingTrip(false);
     resetForm();
-    setStatusMessage("外衝活動已新增。");
     await loadTripData();
+    setStatusMessage(
+      lineError
+        ? "外衝活動已新增，但 LINE 通知發送失敗。"
+        : "外衝活動已新增，LINE 通知已發送。"
+    );
   };
 
   const handleToggleAddCarForm = (tripId: string) => {

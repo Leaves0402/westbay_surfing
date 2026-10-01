@@ -575,6 +575,10 @@ const englishUiText: Record<string, string> = {
   "請填寫公告標題。": "Enter an announcement title.",
   "請填寫公告內容。": "Enter announcement content.",
   "公告已新增。": "Announcement published.",
+  "公告已新增，LINE 通知已發送。":
+    "Announcement published and the LINE notification was sent.",
+  "公告已新增，但 LINE 通知發送失敗。":
+    "Announcement published, but the LINE notification could not be sent.",
   "公告已更新。": "Announcement updated.",
   "公告已刪除。": "Announcement deleted.",
   "確定要刪除這則公告嗎？": "Delete this announcement?",
@@ -600,6 +604,10 @@ const englishUiText: Record<string, string> = {
   "例如上課地點、課程內容、浪況提醒或注意事項":
     "For example: location, lesson content, surf conditions or other notes",
   "社課已新增。": "Lesson created.",
+  "社課已新增，LINE 通知已發送。":
+    "Lesson created and the LINE notification was sent.",
+  "社課已新增，但 LINE 通知發送失敗。":
+    "Lesson created, but the LINE notification could not be sent.",
   "社課已取消。": "Lesson cancelled.",
   "確定要取消此社課嗎？該次報名、備取與簽到紀錄都會被刪除，此操作無法復原。":
     "Cancel this lesson? Its registrations, waitlist and attendance records will be permanently deleted.",
@@ -641,6 +649,10 @@ const englishUiText: Record<string, string> = {
   "例如集合地點、交通方式、浪況提醒或其他注意事項":
     "For example: meeting point, transport, surf conditions or other notes",
   "外衝活動已新增。": "Surf trip created.",
+  "外衝活動已新增，LINE 通知已發送。":
+    "Surf trip created and the LINE notification was sent.",
+  "外衝活動已新增，但 LINE 通知發送失敗。":
+    "Surf trip created, but the LINE notification could not be sent.",
   "活動已移除。": "Trip removed.",
   "外衝已開始，名單已鎖定": "The trip has started and the roster is locked",
   "地點：": "Location:",
