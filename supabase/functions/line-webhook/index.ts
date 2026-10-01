@@ -9,6 +9,10 @@ type LineSource = {
 type LineWebhookEvent = {
   type?: string;
   source?: LineSource;
+  message?: {
+    type?: string;
+    text?: string;
+  };
 };
 
 type LineWebhookBody = {
@@ -111,10 +115,17 @@ Deno.serve(async (request: Request) => {
     return new Response("Invalid JSON", { status: 400 });
   }
 
+  const bindingCommand = "綁定西灣衝浪社通知群組";
   const groupIds = [
     ...new Set(
       (payload.events ?? [])
-        .filter((event) => event.source?.type === "group")
+        .filter(
+          (event) =>
+            event.source?.type === "group" &&
+            event.type === "message" &&
+            event.message?.type === "text" &&
+            event.message.text?.trim() === bindingCommand
+        )
         .map((event) => event.source?.groupId)
         .filter((groupId): groupId is string => Boolean(groupId))
     ),
