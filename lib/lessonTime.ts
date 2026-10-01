@@ -13,9 +13,43 @@ export function hasLessonStarted(lessonDate: string, startTime: string) {
   return Date.now() >= getLessonStartDateTime(lessonDate, startTime).getTime();
 }
 
-export function isLessonCancelLocked(lessonDate: string, startTime: string) {
+export function parseLessonRegistrationDeadline(value: string) {
+  const [date, time] = value.split("T");
+  return parseTaipeiDateTime(date, time);
+}
+
+export function toTaipeiDateTimeLocalValue(timestampMs: number) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(timestampMs));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+}
+
+export function getDefaultLessonRegistrationDeadline(
+  lessonDate: string,
+  startTime: string
+) {
   const start = getLessonStartDateTime(lessonDate, startTime).getTime();
-  return Date.now() >= start - 5 * 60 * 60 * 1000;
+  return toTaipeiDateTimeLocalValue(start - 5 * 60 * 60 * 1000);
+}
+
+export function hasLessonRegistrationClosed(registrationDeadline: string) {
+  return Date.now() >= new Date(registrationDeadline).getTime();
+}
+
+export function getLessonCancellationDeadline(registrationDeadline: string) {
+  return new Date(registrationDeadline).getTime() - 3 * 60 * 60 * 1000;
+}
+
+export function isLessonCancellationLocked(registrationDeadline: string) {
+  return Date.now() >= getLessonCancellationDeadline(registrationDeadline);
 }
 
 export function addHoursToTime(timeString: string, hours: number) {
@@ -48,4 +82,19 @@ export function formatLessonLabel(
   locale: AppLocale = "zh-Hant"
 ) {
   return `${formatLessonDate(lessonDate, locale)} ${formatTime(startTime)}–${formatTime(endTime)}`;
+}
+
+export function formatLessonDeadline(
+  deadline: string | number,
+  locale: AppLocale = "zh-Hant"
+) {
+  return new Date(deadline).toLocaleString(localeForIntl(locale), {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
 }

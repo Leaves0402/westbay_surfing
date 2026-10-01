@@ -9,9 +9,14 @@ import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import {
   addHoursToTime,
+  formatLessonDeadline,
   formatLessonLabel,
+  getDefaultLessonRegistrationDeadline,
+  getLessonCancellationDeadline,
   hasLessonStarted,
-  isLessonCancelLocked,
+  hasLessonRegistrationClosed,
+  isLessonCancellationLocked,
+  parseLessonRegistrationDeadline,
 } from "@/lib/lessonTime";
 import { canManageLessons } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -54,6 +59,11 @@ export function LessonsPanel({
   const [startTime, setStartTime] = useState("15:00");
   const [endTime, setEndTime] = useState("17:00");
   const [endTimeTouched, setEndTimeTouched] = useState(false);
+  const [registrationDeadline, setRegistrationDeadline] = useState(() =>
+    getDefaultLessonRegistrationDeadline(getTaipeiDate(), "15:00")
+  );
+  const [registrationDeadlineTouched, setRegistrationDeadlineTouched] =
+    useState(false);
   const [capacity, setCapacity] = useState("20");
   const [selectedInstructorIds, setSelectedInstructorIds] = useState<string[]>(
     []
@@ -70,7 +80,7 @@ export function LessonsPanel({
         supabase
           .from("lessons")
           .select(
-            "id, lesson_date, start_time, end_time, capacity, waitlist_capacity, note, created_by, created_at, updated_at"
+            "id, lesson_date, start_time, end_time, registration_deadline, capacity, waitlist_capacity, note, created_by, created_at, updated_at"
           )
           .gte("lesson_date", lessonWindowStart)
           .lte("lesson_date", lessonWindowEnd)
@@ -153,10 +163,15 @@ export function LessonsPanel({
   }, [loadLessons]);
 
   const resetForm = () => {
-    setLessonDate(getTaipeiDate());
+    const nextLessonDate = getTaipeiDate();
+    setLessonDate(nextLessonDate);
     setStartTime("15:00");
     setEndTime("17:00");
     setEndTimeTouched(false);
+    setRegistrationDeadline(
+      getDefaultLessonRegistrationDeadline(nextLessonDate, "15:00")
+    );
+    setRegistrationDeadlineTouched(false);
     setCapacity("20");
     setSelectedInstructorIds([]);
     setNote("");
@@ -168,13 +183,28 @@ export function LessonsPanel({
       return;
     }
 
-    if (!lessonDate || !startTime || !endTime) {
+    if (!lessonDate || !startTime || !endTime || !registrationDeadline) {
       onStatusMessage("請填寫日期與時間。");
       return;
     }
 
     if (endTime <= startTime) {
       onStatusMessage("結束時間必須晚於開始時間。");
+      return;
+    }
+
+    const registrationDeadlineDate = parseLessonRegistrationDeadline(
+      registrationDeadline
+    );
+    const lessonStartDate = parseLessonRegistrationDeadline(
+      `${lessonDate}T${startTime}`
+    );
+    if (
+      Number.isNaN(registrationDeadlineDate.getTime()) ||
+      registrationDeadlineDate.getTime() <= Date.now() ||
+      registrationDeadlineDate.getTime() >= lessonStartDate.getTime()
+    ) {
+      onStatusMessage("報名截止時間必須晚於現在且早於社課開始時間。");
       return;
     }
 
@@ -201,6 +231,7 @@ export function LessonsPanel({
       target_waitlist_capacity: 10,
       target_note: note.trim(),
       target_instructor_ids: selectedInstructorIds,
+      target_registration_deadline: registrationDeadlineDate.toISOString(),
     });
 
     setIsCreating(false);
@@ -296,7 +327,15 @@ export function LessonsPanel({
               <input
                 type="date"
                 value={lessonDate}
-                onChange={(event) => setLessonDate(event.target.value)}
+                onChange={(event) => {
+                  const nextDate = event.target.value;
+                  setLessonDate(nextDate);
+                  if (!registrationDeadlineTouched && nextDate) {
+                    setRegistrationDeadline(
+                      getDefaultLessonRegistrationDeadline(nextDate, startTime)
+                    );
+                  }
+                }}
                 className={fieldControlClasses}
               />
             </FormField>
@@ -321,6 +360,14 @@ export function LessonsPanel({
                   if (!endTimeTouched) {
                     setEndTime(addHoursToTime(nextStart, 2));
                   }
+                  if (!registrationDeadlineTouched && lessonDate && nextStart) {
+                    setRegistrationDeadline(
+                      getDefaultLessonRegistrationDeadline(
+                        lessonDate,
+                        nextStart
+                      )
+                    );
+                  }
                 }}
                 className={fieldControlClasses}
               />
@@ -336,6 +383,21 @@ export function LessonsPanel({
                 }}
                 className={fieldControlClasses}
               />
+            </FormField>
+
+            <FormField label="報名截止時間" className="sm:col-span-2">
+              <input
+                type="datetime-local"
+                value={registrationDeadline}
+                onChange={(event) => {
+                  setRegistrationDeadlineTouched(true);
+                  setRegistrationDeadline(event.target.value);
+                }}
+                className={fieldControlClasses}
+              />
+              <p className="mt-1.5 text-xs text-text-secondary">
+                社員可報名到這個時間；取消報名會提早 3 小時截止。
+              </p>
             </FormField>
 
             <div className="sm:col-span-2">
@@ -409,15 +471,17 @@ export function LessonsPanel({
               const isFull = confirmed.length >= lesson.capacity;
               const waitlistFull =
                 waitlist.length >= lesson.waitlist_capacity;
-              const cancelLocked = isLessonCancelLocked(
-                lesson.lesson_date,
-                lesson.start_time
+              const cancelLocked = isLessonCancellationLocked(
+                lesson.registration_deadline
+              );
+              const registrationClosed = hasLessonRegistrationClosed(
+                lesson.registration_deadline
               );
               const lessonStarted = hasLessonStarted(
                 lesson.lesson_date,
                 lesson.start_time
               );
-              const registrationLocked = cancelLocked || lessonStarted;
+              const registrationLocked = registrationClosed || lessonStarted;
               const instructorNames = lesson.instructors
                 .map(
                   (item) =>
@@ -459,6 +523,20 @@ export function LessonsPanel({
                   <p className="mt-1 text-sm text-text-secondary">
                     人數：{confirmed.length} / {lesson.capacity}
                   </p>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    報名截止：
+                    {formatLessonDeadline(lesson.registration_deadline, locale)}
+                  </p>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    取消截止：
+                    {formatLessonDeadline(
+                      getLessonCancellationDeadline(
+                        lesson.registration_deadline
+                      ),
+                      locale
+                    )}
+                    （報名截止前 3 小時）
+                  </p>
                   {isFull && (
                     <p className="mt-1 text-sm text-text-secondary">
                       備取：{waitlist.length} / {lesson.waitlist_capacity}
@@ -488,7 +566,7 @@ export function LessonsPanel({
                         </Button>
                         {cancelLocked && (
                           <span className="text-xs text-text-secondary">
-                            社課開始前 5 小時內不可取消
+                            已超過取消截止時間
                           </span>
                         )}
                       </>
@@ -513,7 +591,7 @@ export function LessonsPanel({
                         </Button>
                         {cancelLocked && (
                           <span className="text-xs text-text-secondary">
-                            社課開始前 5 小時內不可取消
+                            已超過取消截止時間
                           </span>
                         )}
                       </>
@@ -555,7 +633,7 @@ export function LessonsPanel({
 
                     {!mine && registrationLocked && (
                       <span className="text-xs text-text-secondary">
-                        {lessonStarted ? "社課已開始" : "開始前 5 小時停止報名"}
+                        {lessonStarted ? "社課已開始" : "報名已截止"}
                       </span>
                     )}
                   </div>

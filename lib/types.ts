@@ -149,6 +149,7 @@ export type Lesson = {
   lesson_date: string;
   start_time: string;
   end_time: string;
+  registration_deadline: string;
   capacity: number;
   waitlist_capacity: number;
   note: string | null;
