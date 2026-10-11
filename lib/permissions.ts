@@ -61,6 +61,10 @@ export function canViewUnpaidRentals(input: RoleInput) {
 }
 
 export function canMarkRentalPaid(input: RoleInput) {
+  return canManageRentalPayments(input);
+}
+
+export function canResetRentalPayment(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }
 

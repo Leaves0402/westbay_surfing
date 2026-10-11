@@ -32,6 +32,7 @@ import {
   canBrowseSurfboards,
   canManageRentalSlots,
   canMarkRentalPaid,
+  canResetRentalPayment,
   canViewRentals,
   canViewSurfboards,
   canViewUnpaidRentals,
@@ -217,6 +218,7 @@ export default function RentalsPage() {
   const canManageSlots = canManageRentalSlots(profile);
   const canViewUnpaid = canViewUnpaidRentals(profile);
   const canMarkPaid = canMarkRentalPaid(profile);
+  const canResetPayment = canResetRentalPayment(profile);
   const canSeeSurfboards = canViewSurfboards(profile);
   const canPickSurfboards = canBrowseSurfboards(profile);
 
@@ -834,8 +836,12 @@ export default function RentalsPage() {
     registration: RentalRegistration,
     isPaid: boolean
   ) => {
-    if (!canMarkPaid) {
-      setStatusMessage("只有幹部與管理員可以更新繳費狀態。");
+    if (isPaid ? !canMarkPaid : !canResetPayment) {
+      setStatusMessage(
+        isPaid
+          ? "只有板務、幹部與管理員可以標記已繳費。"
+          : "只有幹部與管理員可以取消已繳費標記。"
+      );
       return;
     }
 
@@ -880,7 +886,7 @@ export default function RentalsPage() {
 
   const handleMarkUnpaidAsPaid = async (registration: RentalRegistration) => {
     if (!canMarkPaid) {
-      setStatusMessage("只有幹部與管理員可以標記補繳。");
+      setStatusMessage("只有板務、幹部與管理員可以標記補繳。");
       return;
     }
 
@@ -1244,6 +1250,7 @@ export default function RentalsPage() {
                     myUnpaidCount={myUnpaidCount}
                     canManageSlots={canManageSlots}
                     canMarkPaid={canMarkPaid}
+                    canResetPayment={canResetPayment}
                     getSurfboardById={getSurfboardById}
                     surfboardImageUrls={surfboardImageUrls}
                     updatingRentalSlotId={updatingRentalSlotId}
@@ -1324,6 +1331,7 @@ function RentalSlotDetail({
   myUnpaidCount,
   canManageSlots,
   canMarkPaid,
+  canResetPayment,
   getSurfboardById,
   surfboardImageUrls,
   updatingRentalSlotId,
@@ -1347,6 +1355,7 @@ function RentalSlotDetail({
   myUnpaidCount: number;
   canManageSlots: boolean;
   canMarkPaid: boolean;
+  canResetPayment: boolean;
   getSurfboardById: (surfboardId: string | null) => SurfboardWithImages | null;
   surfboardImageUrls: Record<string, string>;
   updatingRentalSlotId: string | null;
@@ -1561,6 +1570,7 @@ function RentalSlotDetail({
                           <PaymentControl
                             registration={registration}
                             canMarkPaid={canMarkPaid}
+                            canResetPayment={canResetPayment}
                             updatingPaymentRegistrationId={
                               updatingPaymentRegistrationId
                             }
@@ -1638,6 +1648,7 @@ function RentalSlotDetail({
                     <PaymentControl
                       registration={registration}
                       canMarkPaid={canMarkPaid}
+                      canResetPayment={canResetPayment}
                       updatingPaymentRegistrationId={
                         updatingPaymentRegistrationId
                       }
@@ -1938,11 +1949,13 @@ function UnpaidRentalsTable({
 function PaymentControl({
   registration,
   canMarkPaid,
+  canResetPayment,
   updatingPaymentRegistrationId,
   onTogglePayment,
 }: {
   registration: RentalRegistration;
   canMarkPaid: boolean;
+  canResetPayment: boolean;
   updatingPaymentRegistrationId: string | null;
   onTogglePayment: (
     registration: RentalRegistration,
@@ -1955,7 +1968,8 @@ function PaymentControl({
         type="checkbox"
         checked={registration.is_paid}
         disabled={
-          !canMarkPaid || updatingPaymentRegistrationId === registration.id
+          (registration.is_paid ? !canResetPayment : !canMarkPaid) ||
+          updatingPaymentRegistrationId === registration.id
         }
         onChange={(event) =>
           void onTogglePayment(registration, event.target.checked)

@@ -970,8 +970,10 @@ const englishUiText: Record<string, string> = {
   "只有板務、幹部與管理員可以新增租板時段。":
     "Only board managers, officers and admins can create rental sessions.",
   "只有幹部與管理員可以刪除公告。": "Only officers and admins can delete announcements.",
-  "只有幹部與管理員可以更新繳費狀態。":
-    "Only officers and admins can update payment status.",
+  "只有板務、幹部與管理員可以標記已繳費。":
+    "Only board managers, officers and admins can mark rentals as paid.",
+  "只有幹部與管理員可以取消已繳費標記。":
+    "Only officers and admins can mark paid rentals as unpaid.",
   "只有幹部與管理員可以取消社課。": "Only officers and admins can cancel lessons.",
   "只有幹部與管理員可以核准待審核社員。":
     "Only officers and admins can approve pending members.",
@@ -983,8 +985,8 @@ const englishUiText: Record<string, string> = {
   "只有幹部與管理員可以新增社課。": "Only officers and admins can create lessons.",
   "只有幹部與管理員可以管理社員身分。":
     "Only officers and admins can manage member roles.",
-  "只有幹部與管理員可以標記補繳。":
-    "Only officers and admins can mark outstanding payments as paid.",
+  "只有板務、幹部與管理員可以標記補繳。":
+    "Only board managers, officers and admins can mark outstanding payments as paid.",
   "只有幹部與管理員可以編輯公告。": "Only officers and admins can edit announcements.",
   "只有管理員可以審核衝浪程度。": "Only admins can review surfing levels.",
   "請先登入後再新增外衝。": "Sign in before creating a surf trip.",
