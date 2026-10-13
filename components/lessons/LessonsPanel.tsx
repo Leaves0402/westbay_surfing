@@ -85,8 +85,7 @@ export function LessonsPanel({
           )
           .gte("lesson_date", lessonWindowStart)
           .lte("lesson_date", lessonWindowEnd)
-          .order("lesson_date", { ascending: true })
-          .order("start_time", { ascending: true }),
+          .order("created_at", { ascending: false }),
         supabase
           .from("public_member_profiles")
           .select("id, full_name, student_id, surf_level, role"),
@@ -305,6 +304,13 @@ export function LessonsPanel({
       return;
     }
 
+    const lesson = lessons.find((item) => item.id === lessonId);
+    if (!lesson || hasLessonStarted(lesson.lesson_date, lesson.start_time)) {
+      onStatusMessage("社課已開始");
+      await loadLessons();
+      return;
+    }
+
     setActingLessonId(lessonId);
     onStatusMessage("");
     const supabase = createClient();
@@ -513,7 +519,7 @@ export function LessonsPanel({
                         locale
                       )}
                     </p>
-                    {canManage && (
+                    {canManage && !lessonStarted && (
                       <Button
                         variant="danger"
                         className="!min-h-8 !px-2.5 !text-xs"
