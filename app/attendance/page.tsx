@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ClipboardCheck,
+  Download,
   Info,
   Lock,
   RefreshCw,
+  Search,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { MemberAttendanceTables } from "@/components/lessons/MemberAttendanceTables";
 import { useLanguage } from "@/components/LanguageProvider";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { fieldControlClasses } from "@/components/ui/FormField";
@@ -19,6 +21,7 @@ import {
   canViewAttendancePage,
 } from "@/lib/permissions";
 import { formatLessonLabel, hasLessonStarted } from "@/lib/lessonTime";
+import { buildAttendanceCsv } from "@/lib/attendanceCsv";
 import { createClient } from "@/lib/supabase/client";
 import { getTaipeiDate } from "@/lib/taipeiTime";
 import type {
@@ -67,6 +70,8 @@ export default function AttendancePage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [isCheckingInAll, setIsCheckingInAll] = useState(false);
   const [promotingUserId, setPromotingUserId] = useState<string | null>(null);
+  const [statsSearch, setStatsSearch] = useState("");
+  const attendanceBusy = isLoadingData || savingKey !== null || isCheckingInAll || promotingUserId !== null;
 
   const selectedLesson =
     lessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
@@ -266,13 +271,6 @@ export default function AttendancePage() {
     [participants, selectedLessonId]
   );
 
-  const confirmedParticipantCount = lessonParticipants.filter(
-    (participant) => participant.status === "confirmed"
-  ).length;
-  const firstWaitlistUserId =
-    lessonParticipants.find((participant) => participant.status === "waitlist")
-      ?.user_id ?? null;
-
   const instructorStats = useMemo(() => {
     return members
       .filter((member) => member.role === "officer" || member.role === "admin")
@@ -318,11 +316,29 @@ export default function AttendancePage() {
       });
   }, [attendanceOverview, members, startedLessonCount]);
 
+  const filteredMemberStats = memberStats.filter(({ member }) =>
+    (member.full_name ?? "").toLocaleLowerCase().includes(statsSearch.trim().toLocaleLowerCase())
+  );
+
+  const handleExportAttendance = () => {
+    const blob = new Blob([buildAttendanceCsv(filteredMemberStats)], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `西灣衝浪社社員出席統計-${getTaipeiDate()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const toggleInstructorAttendance = async (
     instructorId: string,
     checked: boolean
   ) => {
-    if (!selectedLessonId || !canOperateAttendance) return;
+    if (!selectedLessonId || !canOperateAttendance || attendanceBusy) return;
     setSavingKey(`instructor-${instructorId}`);
     const supabase = createClient();
     const { error } = await supabase.rpc("set_lesson_instructor_attendance", {
@@ -330,16 +346,17 @@ export default function AttendancePage() {
       target_instructor_id: instructorId,
       target_checked_in: checked,
     });
-    setSavingKey(null);
     if (error) {
+      setSavingKey(null);
       setStatusMessage(`更新教學簽到失敗：${error.message}`);
       return;
     }
     await loadData();
+    setSavingKey(null);
   };
 
   const toggleMemberAttendance = async (userId: string, checked: boolean) => {
-    if (!selectedLessonId || !canOperateAttendance) return;
+    if (!selectedLessonId || !canOperateAttendance || attendanceBusy) return;
     const participant = lessonParticipants.find(
       (item) => item.user_id === userId
     );
@@ -354,16 +371,17 @@ export default function AttendancePage() {
       target_user_id: userId,
       target_checked_in: checked,
     });
-    setSavingKey(null);
     if (error) {
+      setSavingKey(null);
       setStatusMessage(`更新社員簽到失敗：${error.message}`);
       return;
     }
     await loadData();
+    setSavingKey(null);
   };
 
   const handlePromoteWaitlistMember = async (userId: string) => {
-    if (!selectedLessonId || !canOperateAttendance) return;
+    if (!selectedLessonId || !canOperateAttendance || attendanceBusy) return;
 
     setPromotingUserId(userId);
     setStatusMessage("");
@@ -372,19 +390,19 @@ export default function AttendancePage() {
       target_lesson_id: selectedLessonId,
       target_user_id: userId,
     });
-    setPromotingUserId(null);
-
     if (error) {
+      setPromotingUserId(null);
       setStatusMessage(`正式遞補失敗：${error.message}`);
       return;
     }
 
     setStatusMessage("候補社員已正式遞補，現在可以簽到。");
     await loadData();
+    setPromotingUserId(null);
   };
 
   const handleCheckInAllInstructors = async () => {
-    if (!selectedLessonId || !canOperateAttendance) return;
+    if (!selectedLessonId || !canOperateAttendance || attendanceBusy) return;
 
     if (!window.confirm("確定要將所有教學標記為出席嗎？")) {
       return;
@@ -396,15 +414,15 @@ export default function AttendancePage() {
     const { error } = await supabase.rpc("check_in_all_lesson_instructors", {
       target_lesson_id: selectedLessonId,
     });
-    setIsCheckingInAll(false);
-
     if (error) {
+      setIsCheckingInAll(false);
       setStatusMessage(`一鍵簽到失敗：${error.message}`);
       return;
     }
 
     setStatusMessage("已將所有教學標記為出席。");
     await loadData();
+    setIsCheckingInAll(false);
   };
 
   return (
@@ -417,7 +435,7 @@ export default function AttendancePage() {
         onLogout={handleLogout}
       />
 
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto min-w-0 max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
         <Card className="mb-6">
           <div className="flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary">
@@ -460,16 +478,17 @@ export default function AttendancePage() {
             </div>
           </Card>
         ) : (
-          <div className="grid gap-6">
+          <div className="grid min-w-0 gap-4 sm:gap-6">
             <Card>
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <label className="flex min-w-[16rem] flex-1 flex-col gap-1.5">
+              <div className="flex items-end justify-between gap-2 sm:gap-3">
+                <label className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <span className="text-sm font-medium text-slate-700">
                     選擇社課
                   </span>
                   <select
                     value={selectedLessonId}
                     onChange={(event) => setSelectedLessonId(event.target.value)}
+                    disabled={attendanceBusy}
                     className={fieldControlClasses}
                   >
                     {lessons.length === 0 && (
@@ -490,9 +509,9 @@ export default function AttendancePage() {
                 <button
                   type="button"
                   aria-label="重新整理"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-surface"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface"
                   onClick={() => void loadData()}
-                  disabled={isLoadingData}
+                  disabled={attendanceBusy}
                 >
                   <RefreshCw
                     size={18}
@@ -509,10 +528,10 @@ export default function AttendancePage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="!min-h-9 !px-3 !text-xs"
+                    className="!px-3 !text-xs"
                     onClick={() => void handleCheckInAllInstructors()}
                     disabled={
-                      isCheckingInAll ||
+                      attendanceBusy ||
                       lessonInstructors.length === 0
                     }
                   >
@@ -524,10 +543,10 @@ export default function AttendancePage() {
                 <p className="text-sm text-text-secondary">本堂沒有教學名單。</p>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-line">
-                  <table className="w-full min-w-[420px] text-left text-sm">
+                  <table className="w-full table-fixed text-left text-sm">
                     <thead className="bg-appBg text-xs text-text-secondary">
                       <tr>
-                        <th className="px-3 py-2">簽到</th>
+                        <th className="w-16 px-3 py-2">簽到</th>
                         <th className="px-3 py-2">姓名</th>
                         <th className="px-3 py-2">程度</th>
                       </tr>
@@ -542,13 +561,15 @@ export default function AttendancePage() {
                             key={instructor.id}
                             className="border-t border-line"
                           >
-                            <td className="px-3 py-2">
+                            <td className="px-1 py-1">
+                              <label className="inline-flex h-11 w-11 items-center justify-center">
+                              <span className="sr-only">簽到：{instructor.full_name || "未填姓名"}</span>
                               <input
                                 type="checkbox"
                                 checked={Boolean(attendance?.checked_in)}
                                 disabled={
                                   !canOperateAttendance ||
-                                  savingKey === `instructor-${instructor.id}`
+                                  attendanceBusy
                                 }
                                 onChange={(event) =>
                                   void toggleInstructorAttendance(
@@ -556,10 +577,11 @@ export default function AttendancePage() {
                                     event.target.checked
                                   )
                                 }
-                                className="h-4 w-4 rounded border-line text-primary"
+                                className="h-5 w-5 rounded border-line accent-primary"
                               />
+                              </label>
                             </td>
-                            <td className="px-3 py-2 font-medium">
+                            <td className="break-words px-2 py-3 font-medium sm:px-3">
                               <span translate="no">
                               <span translate="no">
                                 {instructor.full_name || "未填姓名"}
@@ -580,112 +602,23 @@ export default function AttendancePage() {
 
             <Card>
               <h2 className="mb-3 font-semibold">社員出席簽到</h2>
-              {lessonParticipants.length === 0 ? (
-                <p className="text-sm text-text-secondary">本堂尚無參加者。</p>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-line">
-                  <table className="w-full min-w-[620px] text-left text-sm">
-                    <thead className="bg-appBg text-xs text-text-secondary">
-                      <tr>
-                        <th className="px-3 py-2">簽到</th>
-                        <th className="px-3 py-2">姓名</th>
-                        <th className="px-3 py-2">程度</th>
-                        <th className="px-3 py-2">狀態</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lessonParticipants.map((participant) => {
-                        const member = membersById.get(participant.user_id);
-                        const attendance = memberAttendance.find(
-                          (item) => item.user_id === participant.user_id
-                        );
-                        return (
-                          <tr
-                            key={participant.id}
-                            className="border-t border-line"
-                          >
-                            <td className="px-3 py-2">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(attendance?.checked_in)}
-                                disabled={
-                                  !canOperateAttendance ||
-                                  participant.status !== "confirmed" ||
-                                  savingKey === `member-${participant.user_id}`
-                                }
-                                onChange={(event) =>
-                                  void toggleMemberAttendance(
-                                    participant.user_id,
-                                    event.target.checked
-                                  )
-                                }
-                                className="h-4 w-4 rounded border-line text-primary"
-                              />
-                            </td>
-                            <td className="px-3 py-2 font-medium">
-                              <span translate="no">
-                              <span translate="no">
-                                {member?.full_name || "未填姓名"}
-                              </span>
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <SurfLevelBadge level={member?.surf_level} />
-                            </td>
-                            <td className="px-3 py-2">
-                              {participant.status === "confirmed" ? (
-                                <Badge tone="success">正取</Badge>
-                              ) : (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge tone="warning">
-                                    候補 {participant.waitlist_order ?? ""}
-                                  </Badge>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="!min-h-8 !px-2 !text-xs"
-                                    disabled={
-                                      participant.user_id !== firstWaitlistUserId ||
-                                      !selectedLesson ||
-                                      confirmedParticipantCount >=
-                                        selectedLesson.capacity ||
-                                      promotingUserId !== null
-                                    }
-                                    onClick={() =>
-                                      void handlePromoteWaitlistMember(
-                                        participant.user_id
-                                      )
-                                    }
-                                    title={
-                                      confirmedParticipantCount >=
-                                      (selectedLesson?.capacity ?? 0)
-                                        ? "正取名額已滿，需先釋出名額"
-                                        : participant.user_id !==
-                                            firstWaitlistUserId
-                                          ? "必須依候補順序遞補"
-                                          : "正式遞補後才能簽到"
-                                    }
-                                  >
-                                    {promotingUserId === participant.user_id
-                                      ? "遞補中..."
-                                      : "正式遞補"}
-                                  </Button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <MemberAttendanceTables
+                key={selectedLessonId}
+                participants={lessonParticipants}
+                attendance={memberAttendance}
+                membersById={membersById}
+                capacity={selectedLesson?.capacity ?? 0}
+                disabled={!canOperateAttendance || attendanceBusy || !selectedLesson}
+                promotingUserId={promotingUserId}
+                onCheckIn={toggleMemberAttendance}
+                onPromote={handlePromoteWaitlistMember}
+              />
             </Card>
 
             <Card>
               <h2 className="mb-3 font-semibold">幹部教學次數統計</h2>
               <div className="overflow-x-auto rounded-xl border border-line">
-                <table className="w-full min-w-[420px] text-left text-sm">
+                <table className="w-full table-fixed text-left text-sm">
                   <thead className="bg-appBg text-xs text-text-secondary">
                     <tr>
                       <th className="px-3 py-2">姓名</th>
@@ -696,7 +629,7 @@ export default function AttendancePage() {
                   <tbody>
                     {instructorStats.map(({ member, teachingCount, total }) => (
                       <tr key={member.id} className="border-t border-line">
-                        <td className="px-3 py-2 font-medium">
+                        <td className="break-words px-2 py-3 font-medium sm:px-3">
                           <span translate="no">
                           <span translate="no">
                             {member.full_name || "未填姓名"}
@@ -717,9 +650,31 @@ export default function AttendancePage() {
             </Card>
 
             <Card>
-              <h2 className="mb-3 font-semibold">社員出席社課次數統計</h2>
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="font-semibold">社員出席社課次數統計</h2>
+                <Button
+                  variant="outline"
+                  icon={<Download size={16} aria-hidden="true" />}
+                  onClick={handleExportAttendance}
+                  disabled={attendanceBusy || filteredMemberStats.length === 0}
+                >
+                  匯出 CSV
+                </Button>
+              </div>
+              <label className="relative mb-2 block">
+                <span className="sr-only">搜尋出席統計社員姓名</span>
+                <Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+                <input
+                  type="search"
+                  value={statsSearch}
+                  onChange={(event) => setStatsSearch(event.target.value)}
+                  placeholder="搜尋社員姓名"
+                  className={`${fieldControlClasses} !pl-9`}
+                />
+              </label>
+              <p className="mb-3 text-xs text-text-secondary">CSV 會匯出目前搜尋結果；清空搜尋可匯出全部。</p>
               <div className="max-h-96 overflow-auto rounded-xl border border-line">
-                <table className="w-full min-w-[480px] text-left text-sm">
+                <table className="w-full table-fixed text-left text-sm">
                   <thead className="sticky top-0 bg-appBg text-xs text-text-secondary">
                     <tr>
                       <th className="px-3 py-2">姓名</th>
@@ -728,9 +683,9 @@ export default function AttendancePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {memberStats.map(({ member, count, total }) => (
+                    {filteredMemberStats.map(({ member, count, total }) => (
                       <tr key={member.id} className="border-t border-line">
-                        <td className="px-3 py-2 font-medium">
+                        <td className="break-words px-2 py-3 font-medium sm:px-3">
                           <span translate="no">
                           <span translate="no">
                             {member.full_name || "未填姓名"}
@@ -745,6 +700,9 @@ export default function AttendancePage() {
                         </td>
                       </tr>
                     ))}
+                    {filteredMemberStats.length === 0 && (
+                      <tr><td colSpan={3} className="px-3 py-6 text-center text-text-secondary">找不到符合姓名的社員。</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
