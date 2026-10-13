@@ -14,6 +14,7 @@ import { MemberAttendanceTables } from "@/components/lessons/MemberAttendanceTab
 import { useLanguage } from "@/components/LanguageProvider";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { Button } from "@/components/ui/Button";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { Card } from "@/components/ui/Card";
 import { fieldControlClasses } from "@/components/ui/FormField";
 import {
@@ -616,7 +617,7 @@ export default function AttendancePage() {
             </Card>
 
             <Card>
-              <h2 className="mb-3 font-semibold">幹部教學次數統計</h2>
+              <CollapsibleSection title={<h2>幹部教學次數統計</h2>}>
               <div className="overflow-x-auto rounded-xl border border-line">
                 <table className="w-full table-fixed text-left text-sm">
                   <thead className="bg-appBg text-xs text-text-secondary">
@@ -647,11 +648,12 @@ export default function AttendancePage() {
                   </tbody>
                 </table>
               </div>
+              </CollapsibleSection>
             </Card>
 
             <Card>
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="font-semibold">社員出席社課次數統計</h2>
+              <CollapsibleSection title={<h2>社員出席社課次數統計</h2>}>
+              <div className="mb-3 flex flex-col sm:items-end">
                 <Button
                   variant="outline"
                   icon={<Download size={16} aria-hidden="true" />}
@@ -706,6 +708,7 @@ export default function AttendancePage() {
                   </tbody>
                 </table>
               </div>
+              </CollapsibleSection>
             </Card>
           </div>
         )}

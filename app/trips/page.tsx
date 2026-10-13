@@ -21,8 +21,9 @@ import {
 } from "@/components/trips/TripConvoy";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { Card } from "@/components/ui/Card";
-import { FormField, fieldControlClasses } from "@/components/ui/FormField";
+import { FormField, fieldControlClasses, dateTimeControlClasses } from "@/components/ui/FormField";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
 import { getRoleTone } from "@/lib/badgeTones";
 import { localeForIntl, type AppLocale } from "@/lib/i18n";
@@ -759,7 +760,7 @@ export default function TripsPage() {
                   <h2 className="font-semibold text-text-primary">新增外衝</h2>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField label="出發日期">
                     <input
                       type="date"
@@ -772,7 +773,7 @@ export default function TripsPage() {
                           setEndDate(nextStart);
                         }
                       }}
-                      className={fieldControlClasses}
+                      className={dateTimeControlClasses}
                     />
                   </FormField>
 
@@ -782,7 +783,7 @@ export default function TripsPage() {
                       value={endDate}
                       min={startDate}
                       onChange={(event) => setEndDate(event.target.value)}
-                      className={fieldControlClasses}
+                      className={dateTimeControlClasses}
                     />
                   </FormField>
 
@@ -914,18 +915,21 @@ export default function TripsPage() {
                       trip.min_surf_level
                     );
                     const waitlistFull = trip.waitlist.length >= 3;
+                    const hasEnded = trip.end_date < getTaipeiDate();
                     const hasStarted = Boolean(trip.participation_counted_at);
 
                     return (
-                      <div
+                      <CollapsibleSection
+                        collapsible={hasEnded}
+                        title={<><span>{formatDateRange(trip.start_date, trip.end_date, locale)}</span><span className="ml-2 text-xs font-normal text-text-secondary">已結束</span></>}
                         key={trip.id}
                         className="rounded-xl border border-line bg-appBg p-4"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <p className="text-base font-semibold text-text-primary">
+                            {!hasEnded && <p className="text-base font-semibold text-text-primary">
                               {formatDateRange(trip.start_date, trip.end_date, locale)}
-                            </p>
+                            </p>}
                             {hasStarted && (
                               <p className="mt-1 text-xs font-medium text-success">
                                 已開始，車隊名單已完成外衝計次
@@ -1198,7 +1202,7 @@ export default function TripsPage() {
                             </div>
                           )}
                         </div>
-                      </div>
+                      </CollapsibleSection>
                     );
                   })}
                 </div>

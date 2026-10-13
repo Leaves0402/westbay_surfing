@@ -26,7 +26,7 @@ import { SurfboardThumbnail } from "@/components/rentals/SurfboardThumbnail";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { FormField, fieldControlClasses } from "@/components/ui/FormField";
+import { FormField, fieldControlClasses, dateTimeControlClasses } from "@/components/ui/FormField";
 import { getRoleTone, getSurfLevelTone, toneDotClasses } from "@/lib/badgeTones";
 import {
   canBrowseSurfboards,
@@ -962,14 +962,14 @@ export default function RentalsPage() {
                   <h2 className="font-semibold text-slate-900">新增租板時段</h2>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField label="日期" hint="不能選擇今天以前的日期">
                     <input
                       type="date"
                       value={newSlotDate}
                       min={today}
                       onChange={(event) => setNewSlotDate(event.target.value)}
-                      className={fieldControlClasses}
+                      className={dateTimeControlClasses}
                     />
                   </FormField>
 
@@ -992,7 +992,7 @@ export default function RentalsPage() {
                       onChange={(event) =>
                         setNewSlotStartTime(event.target.value)
                       }
-                      className={fieldControlClasses}
+                      className={dateTimeControlClasses}
                     />
                   </FormField>
 
@@ -1003,7 +1003,7 @@ export default function RentalsPage() {
                       onChange={(event) =>
                         setNewSlotEndTime(event.target.value)
                       }
-                      className={fieldControlClasses}
+                      className={dateTimeControlClasses}
                     />
                   </FormField>
 

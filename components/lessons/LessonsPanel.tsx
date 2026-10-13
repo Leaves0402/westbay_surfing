@@ -5,8 +5,9 @@ import { BookOpen, Plus, RefreshCw } from "lucide-react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { InstructorMultiSelect } from "@/components/lessons/InstructorMultiSelect";
 import { Button } from "@/components/ui/Button";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { Card } from "@/components/ui/Card";
-import { FormField, fieldControlClasses } from "@/components/ui/FormField";
+import { FormField, fieldControlClasses, dateTimeControlClasses } from "@/components/ui/FormField";
 import {
   addHoursToTime,
   formatLessonDeadline,
@@ -14,6 +15,7 @@ import {
   getDefaultLessonRegistrationDeadline,
   getLessonCancellationDeadline,
   hasLessonStarted,
+  hasLessonEnded,
   hasLessonRegistrationClosed,
   isLessonCancellationLocked,
   parseLessonRegistrationDeadline,
@@ -337,7 +339,7 @@ export function LessonsPanel({
             <h2 className="font-semibold text-text-primary">社課</h2>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="日期">
               <input
                 type="date"
@@ -351,7 +353,7 @@ export function LessonsPanel({
                     );
                   }
                 }}
-                className={fieldControlClasses}
+                className={dateTimeControlClasses}
               />
             </FormField>
 
@@ -384,7 +386,7 @@ export function LessonsPanel({
                     );
                   }
                 }}
-                className={fieldControlClasses}
+                className={dateTimeControlClasses}
               />
             </FormField>
 
@@ -396,7 +398,7 @@ export function LessonsPanel({
                   setEndTimeTouched(true);
                   setEndTime(event.target.value);
                 }}
-                className={fieldControlClasses}
+                className={dateTimeControlClasses}
               />
             </FormField>
 
@@ -408,7 +410,7 @@ export function LessonsPanel({
                   setRegistrationDeadlineTouched(true);
                   setRegistrationDeadline(event.target.value);
                 }}
-                className={fieldControlClasses}
+                className={dateTimeControlClasses}
               />
               <p className="mt-1.5 text-xs text-text-secondary">
                 社員可報名到這個時間；取消報名會提早 3 小時截止。
@@ -496,6 +498,7 @@ export function LessonsPanel({
                 lesson.lesson_date,
                 lesson.start_time
               );
+              const lessonEnded = hasLessonEnded(lesson.lesson_date, lesson.end_time);
               const registrationLocked = registrationClosed || lessonStarted;
               const instructorNames = lesson.instructors
                 .map(
@@ -505,12 +508,14 @@ export function LessonsPanel({
                 .join("、");
 
               return (
-                <div
+                <CollapsibleSection
+                  collapsible={lessonEnded}
+                  title={<><span>社課｜{formatLessonLabel(lesson.lesson_date, lesson.start_time, lesson.end_time, locale)}</span><span className="ml-2 text-xs font-normal text-text-secondary">已結束</span></>}
                   key={lesson.id}
                   className="rounded-xl border border-line bg-appBg p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="font-semibold text-text-primary">
+                    {!lessonEnded && <p className="font-semibold text-text-primary">
                       社課｜
                       {formatLessonLabel(
                         lesson.lesson_date,
@@ -518,7 +523,7 @@ export function LessonsPanel({
                         lesson.end_time,
                         locale
                       )}
-                    </p>
+                    </p>}
                     {canManage && !lessonStarted && (
                       <Button
                         variant="danger"
@@ -652,7 +657,7 @@ export function LessonsPanel({
                       </span>
                     )}
                   </div>
-                </div>
+                </CollapsibleSection>
               );
             })}
           </div>

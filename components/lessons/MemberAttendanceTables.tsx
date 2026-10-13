@@ -52,12 +52,15 @@ export function MemberAttendanceTables({
 
   return (
     <div className="min-w-0 space-y-4">
-      <section aria-labelledby="unchecked-heading" className="overflow-hidden rounded-xl border border-line">
-        <div className="space-y-3 bg-appBg p-3">
+      <details className="group overflow-hidden rounded-xl border border-line">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 bg-appBg p-3 [&::-webkit-details-marker]:hidden">
           <h3 id="unchecked-heading" className="flex items-center gap-2 text-sm font-semibold">
             <span>未簽到</span>
             <Badge>{unchecked.length}</Badge>
           </h3>
+          <ChevronDown size={18} aria-hidden="true" className="shrink-0 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="bg-appBg px-3 pb-3">
           <label className="relative block">
             <span className="sr-only">搜尋未簽到社員姓名</span>
             <Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
@@ -130,7 +133,7 @@ export function MemberAttendanceTables({
             )}
           </tbody>
         </table>
-      </section>
+      </details>
 
       <details className="group overflow-hidden rounded-xl border border-line">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 bg-success-light p-3 [&::-webkit-details-marker]:hidden">

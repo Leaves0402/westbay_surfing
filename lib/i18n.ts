@@ -249,6 +249,7 @@ const englishUiText: Record<string, string> = {
   "新增社課紀錄": "Add Lesson Record",
   "簽到名單": "Attendance Roster",
   "已簽到": "Checked in",
+  "已結束": "Ended",
   "未簽到": "Not checked in",
   "全選": "Select all",
   "取消全選": "Clear selection",

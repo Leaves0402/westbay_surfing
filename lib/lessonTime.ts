@@ -13,6 +13,10 @@ export function hasLessonStarted(lessonDate: string, startTime: string) {
   return Date.now() >= getLessonStartDateTime(lessonDate, startTime).getTime();
 }
 
+export function hasLessonEnded(lessonDate: string, endTime: string) {
+  return Date.now() >= parseTaipeiDateTime(lessonDate, endTime).getTime();
+}
+
 export function parseLessonRegistrationDeadline(value: string) {
   const [date, time] = value.split("T");
   return parseTaipeiDateTime(date, time);

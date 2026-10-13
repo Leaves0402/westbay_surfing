@@ -56,6 +56,34 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Keep native date/time controls within narrow grids, including iOS Safari. */
+.date-time-control {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.date-time-control::-webkit-date-and-time-value {
+  min-height: 1.5em;
+  text-align: left;
+}
+
+.date-time-control::-webkit-datetime-edit {
+  min-width: 0;
+  padding: 0;
+}
+
+@media (max-width: 639px) {
+  .date-time-control {
+    /* Prevent automatic zoom when focusing a date/time field on iPhone. */
+    font-size: 16px;
+  }
+}
+
 @keyframes drawer-panel-in {
   from {
     transform: translateX(-100%);
