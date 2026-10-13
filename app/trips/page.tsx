@@ -755,10 +755,14 @@ export default function TripsPage() {
           <div className="grid gap-6">
             {canCreate && (
               <Card>
-                <div className="mb-4 flex items-center gap-2">
-                  <Plus size={18} className="text-primary" strokeWidth={2} />
-                  <h2 className="font-semibold text-text-primary">新增外衝</h2>
-                </div>
+                <CollapsibleSection
+                  title={
+                    <div className="flex items-center gap-2">
+                    <Plus size={18} className="text-primary" strokeWidth={2} />
+                    <h2 className="font-semibold text-text-primary">新增外衝</h2>
+                    </div>
+                  }
+                >
 
                 <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField label="出發日期">
@@ -852,6 +856,7 @@ export default function TripsPage() {
                 >
                   {isCreatingTrip ? "新增中..." : "新增外衝"}
                 </Button>
+              </CollapsibleSection>
               </Card>
             )}
 

@@ -25,6 +25,7 @@ import { SurfboardPicker } from "@/components/rentals/SurfboardPicker";
 import { SurfboardThumbnail } from "@/components/rentals/SurfboardThumbnail";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses, dateTimeControlClasses } from "@/components/ui/FormField";
 import { getRoleTone, getSurfLevelTone, toneDotClasses } from "@/lib/badgeTones";
@@ -957,10 +958,14 @@ export default function RentalsPage() {
           <>
             {canManageSlots && (
               <Card className="mb-6">
-                <div className="mb-4 flex items-center gap-2">
-                  <Plus size={18} className="text-primary" strokeWidth={2} />
-                  <h2 className="font-semibold text-slate-900">新增租板時段</h2>
-                </div>
+                <CollapsibleSection
+                  title={
+                    <div className="flex items-center gap-2">
+                    <Plus size={18} className="text-primary" strokeWidth={2} />
+                    <h2 className="font-semibold text-slate-900">新增租板時段</h2>
+                    </div>
+                  }
+                >
 
                 <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField label="日期" hint="不能選擇今天以前的日期">
@@ -1078,6 +1083,7 @@ export default function RentalsPage() {
                 >
                   {isCreatingRentalSlot ? "新增中..." : "新增租板時段"}
                 </Button>
+              </CollapsibleSection>
               </Card>
             )}
 

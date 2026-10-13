@@ -334,10 +334,14 @@ export function LessonsPanel({
     <div className="grid gap-6">
       {canManage && (
         <Card>
-          <div className="mb-4 flex items-center gap-2">
-            <Plus size={18} className="text-primary" />
-            <h2 className="font-semibold text-text-primary">社課</h2>
-          </div>
+          <CollapsibleSection
+            title={
+              <div className="flex items-center gap-2">
+              <Plus size={18} className="text-primary" />
+              <h2 className="font-semibold text-text-primary">新增社課</h2>
+              </div>
+            }
+          >
 
           <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="日期">
@@ -447,6 +451,7 @@ export function LessonsPanel({
           >
             {isCreating ? "新增中..." : "新增社課"}
           </Button>
+        </CollapsibleSection>
         </Card>
       )}
 

@@ -16,6 +16,7 @@ import { Navbar } from "@/components/Navbar";
 import { useLanguage } from "@/components/LanguageProvider";
 import { AnnouncementImageField } from "@/components/announcements/AnnouncementImageField";
 import { Button } from "@/components/ui/Button";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { Card } from "@/components/ui/Card";
 import { FormField, fieldControlClasses } from "@/components/ui/FormField";
 import { localeForIntl, type AppLocale } from "@/lib/i18n";
@@ -429,10 +430,14 @@ export default function AnnouncementsPage() {
           <>
             {canManage && (
               <Card className="mb-6">
-                <div className="mb-4 flex items-center gap-2">
-                  <Plus size={18} className="text-primary" strokeWidth={2} />
-                  <h2 className="font-semibold text-text-primary">新增公告</h2>
-                </div>
+                <CollapsibleSection
+                  title={
+                    <div className="flex items-center gap-2">
+                    <Plus size={18} className="text-primary" strokeWidth={2} />
+                    <h2 className="font-semibold text-text-primary">新增公告</h2>
+                    </div>
+                  }
+                >
 
                 <div className="grid gap-4">
                   <FormField label="公告標題">
@@ -477,6 +482,7 @@ export default function AnnouncementsPage() {
                 >
                   {isCreatingAnnouncement ? "新增中..." : "新增公告"}
                 </Button>
+              </CollapsibleSection>
               </Card>
             )}
 
