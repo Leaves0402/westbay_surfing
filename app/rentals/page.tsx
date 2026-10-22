@@ -22,6 +22,8 @@ import { useLanguage } from "@/components/LanguageProvider";
 import { PublicRentalSchedule } from "@/components/rentals/PublicRentalSchedule";
 import { SurfboardManager } from "@/components/rentals/SurfboardManager";
 import { SurfboardPicker } from "@/components/rentals/SurfboardPicker";
+import { RentalRulesDialog, RentalRulesSection } from "@/components/rentals/RentalRules";
+import { useRentalRules } from "@/lib/useRentalRules";
 import { SurfboardThumbnail } from "@/components/rentals/SurfboardThumbnail";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -32,6 +34,7 @@ import { getRoleTone, getSurfLevelTone, toneDotClasses } from "@/lib/badgeTones"
 import {
   canBrowseSurfboards,
   canManageRentalSlots,
+  canManageRentalRules,
   canMarkRentalPaid,
   canResetRentalPayment,
   canViewRentals,
@@ -144,6 +147,8 @@ function getRentalRenterIdentity(
 
 export default function RentalsPage() {
   const { locale } = useLanguage();
+  const rentalRules = useRentalRules();
+  const [rulesSlot, setRulesSlot] = useState<RentalSlot | null>(null);
   const weekdayLabels = getWeekdayLabels(locale);
   const {
     user,
@@ -707,8 +712,8 @@ export default function RentalsPage() {
     await loadRentalData();
   };
 
-  /** 登記前先開啟挑板視窗，實際登記在 handleConfirmRegistration。 */
-  const handleRegisterRental = async (slot: RentalSlot) => {
+  /** 先確認規定，再開啟挑板視窗；確認後重新檢查時段資格。 */
+  const handleRegisterRental = async (slot: RentalSlot, rulesAccepted = false) => {
     if (!user) {
       setStatusMessage("請先登入後再登記租板。");
       return;
@@ -747,7 +752,11 @@ export default function RentalsPage() {
     }
 
     setStatusMessage("");
-    setPickerSlotId(slot.id);
+    if (rulesAccepted) {
+      setPickerSlotId(slot.id);
+    } else {
+      setRulesSlot(slot);
+    }
   };
 
   const handleConfirmRegistration = async (surfboardId: string) => {
@@ -945,15 +954,17 @@ export default function RentalsPage() {
           </div>
         </Card>
 
+        <RentalRulesSection rules={rentalRules} canEdit={canManageRentalRules(profile)} />
+
         {isLoading ? (
           <Card className="flex items-center gap-2 text-sm text-slate-500">
             <RefreshCw size={16} className="animate-spin" />
             正在讀取登入狀態...
           </Card>
         ) : !user ? (
-          <PublicRentalSchedule mode="guest" />
+          <PublicRentalSchedule mode="guest" onRulesLoaded={rentalRules.setContent} />
         ) : !canView ? (
-          <PublicRentalSchedule mode="pending" />
+          <PublicRentalSchedule mode="pending" onRulesLoaded={rentalRules.setContent} />
         ) : (
           <>
             {canManageSlots && (
@@ -1306,6 +1317,19 @@ export default function RentalsPage() {
           </Card>
         )}
       </div>
+
+      {rulesSlot && (
+        <RentalRulesDialog
+          onClose={() => setRulesSlot(null)}
+          onLoaded={rentalRules.setContent}
+          onContinue={() => {
+            const slot = rentalSlots.find((item) => item.id === rulesSlot.id);
+            setRulesSlot(null);
+            if (slot) void handleRegisterRental(slot, true);
+            else setStatusMessage("找不到租板時段，請重新整理後再試。");
+          }}
+        />
+      )}
 
       {pickerSlotId && (
         <SurfboardPicker

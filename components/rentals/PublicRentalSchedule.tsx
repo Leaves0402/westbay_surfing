@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { GuestRentalFlow } from "@/components/rentals/GuestRentalFlow";
+import { RentalRulesDialog } from "@/components/rentals/RentalRules";
 import { GuestReservationLookup } from "@/components/rentals/GuestReservationLookup";
 import { useLanguage } from "@/components/LanguageProvider";
 import { SurfLevelBadge } from "@/components/SurfLevelBadge";
@@ -39,8 +40,10 @@ const EXPIRATION_TICK_MS = 30_000;
 
 export function PublicRentalSchedule({
   mode,
+  onRulesLoaded,
 }: {
   mode: "guest" | "pending";
+  onRulesLoaded: (content: string) => void;
 }) {
   const { locale } = useLanguage();
   const weekdayLabels = getWeekdayLabels(locale);
@@ -53,6 +56,7 @@ export function PublicRentalSchedule({
   );
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [guestFlowSlotId, setGuestFlowSlotId] = useState<string | null>(null);
+  const [rulesSlotId, setRulesSlotId] = useState<string | null>(null);
 
   const loadSchedule = useCallback(async () => {
     setIsLoading(true);
@@ -248,7 +252,7 @@ export function PublicRentalSchedule({
               slot={selectedSlot}
               isExpired={isRentalSlotExpired(selectedSlot, currentTime)}
               mode={mode}
-              onGuestRegister={() => setGuestFlowSlotId(selectedSlot.id)}
+              onGuestRegister={() => setRulesSlotId(selectedSlot.id)}
             />
           ) : (
             <Card className="flex flex-col items-center justify-center gap-2 py-10 text-center">
@@ -292,6 +296,22 @@ export function PublicRentalSchedule({
           )}
         </div>
       </section>
+
+      {mode === "guest" && rulesSlotId && (
+        <RentalRulesDialog
+          onClose={() => setRulesSlotId(null)}
+          onLoaded={onRulesLoaded}
+          onContinue={() => {
+            const slot = slots.find((item) => item.id === rulesSlotId);
+            setRulesSlotId(null);
+            if (!slot || !slot.is_open || isRentalSlotExpired(slot) || slot.registration_count >= slot.capacity) {
+              setErrorMessage("此租板時段目前無法登記，請重新選擇。");
+              return;
+            }
+            setGuestFlowSlotId(slot.id);
+          }}
+        />
+      )}
 
       {mode === "guest" && guestFlowSlot && (
         <GuestRentalFlow

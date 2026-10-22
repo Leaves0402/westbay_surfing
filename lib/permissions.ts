@@ -52,6 +52,10 @@ export function canManageRentalSlots(input: RoleInput) {
   return hasAtLeastRole(input, "board_manager");
 }
 
+export function canManageRentalRules(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
 export function canManageRentalPayments(input: RoleInput) {
   return hasAtLeastRole(input, "board_manager");
 }

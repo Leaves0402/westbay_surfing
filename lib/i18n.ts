@@ -8,6 +8,19 @@ export const LOCALE_STORAGE_KEY = "westbay-surf-club-locale";
  * entered by users intentionally do not belong in this dictionary.
  */
 const englishUiText: Record<string, string> = {
+  "租板規定": "Board Rental Rules",
+  "編輯租板規定": "Edit Rental Rules",
+  "租板規定內容": "Rental rules content",
+  "租板規定尚未公布": "Rental rules have not been published yet",
+  "正在讀取租板規定...": "Loading rental rules...",
+  "無法讀取租板規定，請重試。": "Unable to load rental rules. Please try again.",
+  "重新讀取": "Reload",
+  "儲存租板規定失敗，請確認權限後重試。": "Unable to save rental rules. Check your permissions and try again.",
+  "租板規定已儲存。": "Rental rules saved.",
+  "請閱讀租板規定，勾選確認後繼續報名。": "Read the rental rules and check the box to continue registering.",
+  "我已閱讀並知悉租板規定": "I have read and understood the rental rules",
+  "繼續報名": "Continue Registration",
+  "此租板時段目前無法登記，請重新選擇。": "This session is no longer available. Please choose another session.",
   // Global navigation and authentication
   "開啟選單": "Open menu",
   "開啟選單（有待查看項目）": "Open menu (items need attention)",
