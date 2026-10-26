@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Minus, Plus, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus, RefreshCw, Search } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { canViewOperationsDashboard } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +9,10 @@ import { getTaipeiDate } from "@/lib/taipeiTime";
 import { useAuthProfile } from "@/lib/useAuthProfile";
 import "./dashboard.css";
 
-type Collector = { id: string | null; name: string; amount: number };
+type Collector = { id: string | null; name: string; role: string | null; amount: number };
+type Attendance = { id: string; name: string; count: number };
+type StorageTab = "add" | "list" | "unpaid";
+const storageTabs: { id: StorageTab; label: string }[] = [{ id: "add", label: "新增租用者" }, { id: "list", label: "板位名單" }, { id: "unpaid", label: "未繳費資訊" }];
 type Daily = { day: string; count: number };
 type Lease = {
   id: string; member_id: string | null; name: string; type: "member" | "guest";
@@ -17,7 +20,7 @@ type Lease = {
 };
 type Dashboard = {
   today: string; month: string; through: string; income: number;
-  collectors: Collector[]; daily: Daily[];
+  collectors: Collector[]; daily: Daily[]; attendance: Attendance[];
   monthly: { total: number; members: number; guests: number; unpaid: number };
   storage: { capacity: number; leases: Lease[] };
 };
@@ -71,40 +74,100 @@ function Ring({ value, total, label, tone = 0, large = false, compact = false }:
   );
 }
 
-function TrendChart({ days }: { days: Daily[] }) {
+function TrendChart({ days, month }: { days: Daily[]; month: string }) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 760, height: 200 });
+  const [size, setSize] = useState({ width: 760, height: 240 });
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   useEffect(() => {
     const element = chartRef.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
-      setSize({ width: Math.max(280, entry.contentRect.width), height: Math.max(80, entry.contentRect.height) });
+      setSize({ width: Math.max(280, entry.contentRect.width), height: Math.max(125, entry.contentRect.height) });
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const { width, height } = size, left = 40, right = 26, top = 25, bottom = 29;
-  const max = Math.max(0, ...days.map(d => d.count)) + 1;
-  const y = (n: number) => top + (height - top - bottom) * (1 - n / max);
-  const x = (i: number) => left + (width - left - right) * (days.length < 2 ? .5 : i / (days.length - 1));
-  const points = days.map((d, i) => x(i) + "," + y(d.count)).join(" ");
-  const area = points ? x(0) + "," + y(0) + " " + points + " " + x(days.length - 1) + "," + y(0) : "";
-  const ticks = Array.from(new Set(height < 180 ? [0, Math.ceil(max / 2), max] : [0, Math.ceil(max / 4), Math.ceil(max / 2), Math.ceil(max * 3 / 4), max]));
-  const tickCount = Math.min(days.length, Math.max(2, Math.floor(width / 95)));
-  const dayTicks = Array.from(new Set(Array.from({ length: tickCount }, (_, i) => Math.round(i * (days.length - 1) / Math.max(1, tickCount - 1)))));
+  const [year, numericMonth] = month.slice(0, 7).split("-").map(Number);
+  const count = new Date(Date.UTC(year, numericMonth, 0)).getUTCDate();
+  const counts = new Map(days.map(day => [day.day, day.count]));
+  const calendar = Array.from({ length: count }, (_, index) => {
+    const day = month.slice(0, 7) + "-" + String(index + 1).padStart(2, "0");
+    return { day, count: counts.get(day) ?? null };
+  });
+  const { width, height } = size, left = 40, right = 20, top = 23, bottom = 30;
+  const highest = Math.max(0, ...days.map(day => day.count));
+  const tickStep = highest > 12 ? Math.ceil((highest + 1) / 12) * 3 : 3;
+  const max = highest > 12 ? Math.ceil((highest + 1) / tickStep) * tickStep : 12;
+  const y = (value: number) => top + (height - top - bottom) * (1 - value / max);
+  const x = (index: number) => left + (width - left - right) * index / Math.max(1, calendar.length - 1);
+  const actual = calendar.flatMap((day, index) => day.count === null ? [] : [{ ...day, index, count: day.count }]);
+  const points = actual.map(day => x(day.index) + "," + y(day.count)).join(" ");
+  const area = actual.length ? x(actual[0].index) + "," + y(0) + " " + points + " " + x(actual[actual.length - 1].index) + "," + y(0) : "";
+  const ticks = Array.from({ length: max / tickStep + 1 }, (_, index) => index * tickStep);
+  const hovered = hoverIndex === null ? null : calendar[hoverIndex];
+  const hasHover = hovered?.count !== null && hovered?.count !== undefined;
+  const tooltipX = hoverIndex === null ? 0 : Math.max(left, Math.min(width - 151, x(hoverIndex) - 69));
+  const tooltipY = hasHover ? y(hovered!.count!) - 58 : 0;
+  const pointAt = (event: React.PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const offset = (event.clientX - rect.left) * width / rect.width;
+    if (offset < left || offset > width - right) { setHoverIndex(null); return; }
+    const index = Math.max(0, Math.min(calendar.length - 1, Math.round((offset - left) / (width - left - right) * (calendar.length - 1))));
+    setHoverIndex(calendar[index].count === null ? null : index);
+  };
+  const moveKeyboard = (event: React.KeyboardEvent<SVGSVGElement>) => {
+    if (event.key === "Escape") { setHoverIndex(null); return; }
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || !actual.length) return;
+    event.preventDefault();
+    const last = actual[actual.length - 1].index;
+    setHoverIndex(current => event.key === "Home" ? 0 : event.key === "End" ? last : Math.max(0, Math.min(last, (current ?? 0) + (event.key === "ArrowRight" ? 1 : -1))));
+  };
   return <div className="db-chart-scroll" ref={chartRef}>
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="每日租板登記人次折線圖；縱軸最高為當月單日最高人次加一" className="db-trend">
-      <defs><linearGradient id="db-line-fill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#4de6d2" stopOpacity=".22" /><stop offset="1" stopColor="#4de6d2" stopOpacity="0" /></linearGradient></defs>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" tabIndex={0}
+      aria-label={`每日租板人次，${year} 年 ${numericMonth} 月，共 ${count} 天；可用左右方向鍵查看日期與人次`}
+      onPointerMove={pointAt} onPointerLeave={() => setHoverIndex(null)}
+      onFocus={event => { if (event.currentTarget.matches(":focus-visible")) setHoverIndex(current => current ?? (actual.length ? 0 : null)); }}
+      onBlur={() => setHoverIndex(null)} onKeyDown={moveKeyboard} className="db-trend">
+      <defs><linearGradient id="db-line-fill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#4de6d2" stopOpacity=".2" /><stop offset="1" stopColor="#4de6d2" stopOpacity="0" /></linearGradient></defs>
       <text x="1" y="15" fill="#b4d5df" fontSize="14">人次</text>
-      {ticks.map(n => <g key={n}><line x1={left} x2={width - right} y1={y(n)} y2={y(n)} stroke="#35525f" strokeDasharray="3 6" /><text x={left - 12} y={y(n) + 5} textAnchor="end" fill="#accbd6" fontSize="14">{n}</text></g>)}
+      {ticks.map(value => <g key={value}><line x1={left} x2={width - right} y1={y(value)} y2={y(value)} stroke="#35525f" strokeDasharray="3 6" /><text x={left - 12} y={y(value) + 5} textAnchor="end" fill="#accbd6" fontSize="14">{value}</text></g>)}
+      {calendar.map((day, index) => (index + 1) % 5 === 0 && <g key={day.day}>
+        <line x1={x(index)} x2={x(index)} y1={top} y2={y(0)} stroke="#284957" strokeDasharray="3 6" />
+        <text x={x(index)} y={height - 7} textAnchor="middle" fill="#accbd6" fontSize="14">{index + 1}</text>
+      </g>)}
       <line x1={left} x2={left} y1={top} y2={y(0)} stroke="#587580" />
       <line x1={left} x2={width - right} y1={y(0)} y2={y(0)} stroke="#587580" />
       {area && <polygon points={area} fill="url(#db-line-fill)" />}
       {points && <polyline points={points} fill="none" stroke="#72ead0" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
-      {days.map((d, i) => d.count > 0 && <circle key={d.day} cx={x(i)} cy={y(d.count)} r="3.5" fill="#a4fff0"><title>{d.day}：{d.count} 人次</title></circle>)}
-      {dayTicks.map(i => days[i] && <text key={days[i].day} x={x(i)} y={height - 7} textAnchor="middle" fill="#accbd6" fontSize="14">{Number(days[i].day.slice(-2))}</text>)}
-      <text x={width - 2} y={height - 7} textAnchor="end" fill="#b4d5df" fontSize="14">日</text>
+      {actual.map(day => day.count > 0 && <circle key={day.day} cx={x(day.index)} cy={y(day.count)} r="3" fill="#a4fff0" />)}
+      <text x={width - 1} y={height - 7} textAnchor="end" fill="#b4d5df" fontSize="14">日</text>
+      {hasHover && hoverIndex !== null && <g className="db-chart-tooltip" pointerEvents="none">
+        <line x1={x(hoverIndex)} x2={x(hoverIndex)} y1={top} y2={y(0)} stroke="#c9f7ee" strokeWidth="1.5" strokeDasharray="4 5" />
+        <circle cx={x(hoverIndex)} cy={y(hovered!.count!)} r="5" fill="#b0ffef" stroke="#0e2836" strokeWidth="2" />
+        <rect x={tooltipX} y={tooltipY} width="140" height="48" rx="7" fill="#153c4c" stroke="#69cdb8" />
+        <text x={tooltipX + 11} y={tooltipY + 19} fill="#ddf6f9" fontSize="13">{dates(hovered!.day)}</text>
+        <text x={tooltipX + 11} y={tooltipY + 38} fill="#86f2d6" fontSize="14" fontWeight="700">{hovered!.count} 人次</text>
+      </g>}
     </svg>
+  </div>;
+}
+
+function AttendanceChart({ entries, colors }: { entries: Attendance[]; colors: Record<string, string> }) {
+  const total = entries.reduce((sum, entry) => sum + entry.count, 0);
+  const activeEntries = entries.filter(entry => entry.count > 0);
+  return <div className="db-attendance-body">
+    <svg className="db-attendance-pie" viewBox="0 0 200 200" role="img" aria-label={"本月板務出勤，共 " + total + " 次；" + entries.map(entry => entry.name + " " + entry.count + " 次").join("，")}>
+      {!total && <circle cx="100" cy="100" r="84" fill="#2c4655" />}
+      {activeEntries.map((entry, index) => {
+        const start = -Math.PI / 2 + activeEntries.slice(0, index).reduce((sum, previous) => sum + previous.count, 0) / total * Math.PI * 2;
+        const end = start + entry.count / total * Math.PI * 2;
+        const color = colors[entry.id] ?? "#99b6c6";
+        if (entry.count === total) return <circle key={entry.id} cx="100" cy="100" r="84" fill={color}><title>{entry.name}：{entry.count} 次</title></circle>;
+        const path = `M 100 100 L ${100 + 84 * Math.cos(start)} ${100 + 84 * Math.sin(start)} A 84 84 0 ${end - start > Math.PI ? 1 : 0} 1 ${100 + 84 * Math.cos(end)} ${100 + 84 * Math.sin(end)} Z`;
+        return <path key={entry.id} d={path} fill={color} stroke="#102635" strokeWidth="2"><title>{entry.name}：{entry.count} 次（{Math.round(entry.count / total * 100)}%）</title></path>;
+      })}
+    </svg>
+    <ul className="db-attendance-legend">{entries.map(entry => <li key={entry.id}><span><i style={{ background: colors[entry.id] ?? "#99b6c6" }} /><span translate="no">{entry.name}</span></span><strong>{entry.count}<small>次</small></strong></li>)}</ul>
   </div>;
 }
 
@@ -127,8 +190,7 @@ export default function DashboardPage() {
   const [renterType, setRenterType] = useState<"member" | "guest">("member");
   const [guestName, setGuestName] = useState("");
   const [startOn, setStartOn] = useState(getTaipeiDate());
-  const [open, setOpen] = useState({ add: false, list: true, unpaid: true });
-  const [removeMode, setRemoveMode] = useState(false);
+  const [storageTab, setStorageTab] = useState<StorageTab>("list");
   const collectorsRef = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(async (target: string) => {
@@ -171,7 +233,7 @@ export default function DashboardPage() {
       action: "add", member_id: renterType === "member" ? selected?.id : null,
       guest_name: renterType === "guest" ? guestName.trim() : null, start_on: startOn
     }, "已新增板位租用紀錄。");
-    if (ok) { setSelected(null); setSearch(""); setGuestName(""); setMatches([]); }
+    if (ok) { setSelected(null); setSearch(""); setGuestName(""); setMatches([]); setStorageTab("list"); }
   };
 
   const changeMonth = (delta: number) => {
@@ -189,78 +251,98 @@ export default function DashboardPage() {
   const empty = <p className="db-empty">目前沒有資料</p>;
   const formatMonth = useMemo(() => month.replace("-", " / "), [month]);
 
+  const collectors = useMemo(() => [...(data?.collectors ?? [])].sort((a, b) => Number(b.role === "board_manager") - Number(a.role === "board_manager") || b.amount - a.amount || a.name.localeCompare(b.name, "zh-TW")), [data]);
+  const attendanceColors = useMemo(() => {
+    const colors: Record<string, string> = { staff: "#bc9dfb", unassigned: "#99b6c6" };
+    collectors.filter(collector => collector.role === "board_manager").forEach((collector, index) => { if (collector.id) colors[collector.id] = swatches[index % 5]; });
+    return colors;
+  }, [collectors]);
+  const attendanceTotal = (data?.attendance ?? []).reduce((sum, entry) => sum + entry.count, 0);
+  const switchStorageTab = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? storageTabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + storageTabs.length) % storageTabs.length;
+    setStorageTab(storageTabs[next].id);
+    document.getElementById("db-tab-" + storageTabs[next].id)?.focus();
+  };
+
   return (
     <main className="db-shell">
       <Navbar user={user} profile={profile} isLoading={isLoading} onLogin={handleGoogleLogin} onLogout={handleLogout} />
-      <div className="db-page">
-        <div className="db-content">
-          {isLoading ? <p className="db-access">正在確認登入身分…</p>
-          : !user ? <p className="db-access">請登入後查看營運儀錶板。</p>
-          : !allowed ? <p className="db-access">此頁僅供幹部與管理員查看。</p>
-          : <>
-            {statusMessage && <p className="db-alert" role="alert">{statusMessage}</p>}
-            {error && <p className="db-alert" role="alert">{error}</p>}
-            {notice && <p className="db-success" role="status">{notice}</p>}
-            <div className="db-toolbar" role="group" aria-label="月份與資料更新">
-              <div className="db-month"><button aria-label="上個月" type="button" onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatMonth}</strong><button aria-label="下個月" type="button" disabled={month >= currentMonth} onClick={() => changeMonth(1)}><ChevronRight size={18} /></button></div>
-              <button className="db-refresh" type="button" aria-label="更新資料" title="更新資料" disabled={busy || actionBusy} onClick={() => void reload(month)}><RefreshCw size={16} className={busy ? "db-spin" : ""} /><span>更新</span></button>
-            </div>
-            <div className="db-workspace">
+      <div className="db-page"><div className="db-content">
+        {isLoading ? <p className="db-access">正在確認登入身分…</p>
+        : !user ? <p className="db-access">請登入後查看營運儀錶板。</p>
+        : !allowed ? <p className="db-access">此頁僅供幹部與管理員查看。</p>
+        : <>
+          {statusMessage && <p className="db-alert" role="alert">{statusMessage}</p>}
+          {error && <p className="db-alert" role="alert">{error}</p>}
+          {notice && <p className="db-success" role="status">{notice}</p>}
+          <div className="db-toolbar" role="group" aria-label="月份與資料更新">
+            <div className="db-month"><button aria-label="上個月" type="button" disabled={busy} onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatMonth}</strong><button aria-label="下個月" type="button" disabled={busy || month >= currentMonth} onClick={() => changeMonth(1)}><ChevronRight size={18} /></button></div>
+            <button className="db-refresh" type="button" aria-label="更新資料" title="更新資料" disabled={busy || actionBusy} onClick={() => void reload(month)}><RefreshCw size={16} className={busy ? "db-spin" : ""} /><span>更新</span></button>
+          </div>
+          <div className="db-workspace">
             {!data ? <Panel title="租板資料">{busy ? <p className="db-empty">正在載入…</p> : empty}</Panel> : <>
               <div className="db-rent-grid" aria-busy={busy}>
-                <Panel title="租板累積收入" className="db-income-panel">
-                  <SemicircleGauge value={data.income} step={2000} unit="元" label="租板累積已收款" />
-                </Panel>
-                <Panel title="每日租板人次" className="db-daily-panel" actions={<span className="db-chart-total">{data.monthly.total}<small>人次</small></span>}>
-                  <TrendChart days={data.daily} />
-                </Panel>
-                <Panel title="各人員收款" className="db-collector-panel" actions={<div className="db-carousel-actions">
-                  <button type="button" aria-label="向左查看收款人員" onClick={() => collectorsRef.current?.scrollBy({ left: -420, behavior: "smooth" })}><ChevronLeft size={18} /></button>
-                  <button type="button" aria-label="向右查看收款人員" onClick={() => collectorsRef.current?.scrollBy({ left: 420, behavior: "smooth" })}><ChevronRight size={18} /></button>
-                </div>}>
-                  <div className="db-collector-grid" ref={collectorsRef} tabIndex={0} role="region" aria-label="收款人員，可左右捲動">
-                    {data.collectors.length ? data.collectors.map((c, i) => <div className="db-collector" key={c.id ?? "unknown"} title={c.name + "：" + currency(c.amount)}>
-                      <Ring value={c.amount} total={data.income} label={c.name} tone={i} compact />
-                      <div className="db-collector-info"><span translate="no">{c.name}</span><strong style={{ color: swatches[i % 5] }}>{currency(c.amount)}</strong></div>
+                <Panel title="租板累積收入" className="db-income-panel"><SemicircleGauge value={data.income} step={2000} unit="元" label="租板累積已收款" /></Panel>
+                <Panel title="每日租板人次" className="db-daily-panel" actions={<span className="db-chart-total">{data.monthly.total}<small>人次</small></span>}><TrendChart days={data.daily} month={data.month} /></Panel>
+                <section className="db-panel db-collector-panel" aria-label="各人員收款">
+                  <button className="db-carousel-edge" type="button" aria-label="向左查看收款人員" onClick={() => collectorsRef.current?.scrollBy({ left: -420, behavior: "smooth" })}><ChevronLeft size={18} /></button>
+                  <div className="db-collector-grid" ref={collectorsRef} tabIndex={0} role="region" aria-label="收款人員，板務在前，可左右捲動">
+                    {collectors.length ? collectors.map((collector, index) => <div className="db-collector" key={collector.id ?? "unknown"} title={collector.name + "：" + currency(collector.amount)}>
+                      <Ring value={collector.amount} total={data.income} label={collector.name} tone={index} compact />
+                      <div className="db-collector-info"><span translate="no">{collector.name}</span><strong style={{ color: swatches[index % 5] }}>{currency(collector.amount)}</strong></div>
                     </div>) : empty}
                   </div>
-                </Panel>
+                  <button className="db-carousel-edge" type="button" aria-label="向右查看收款人員" onClick={() => collectorsRef.current?.scrollBy({ left: 420, behavior: "smooth" })}><ChevronRight size={18} /></button>
+                </section>
+                <Panel title="板務出勤次數" className="db-attendance-panel" actions={<span className="db-attendance-total">{attendanceTotal}<small>次</small></span>}><AttendanceChart entries={data.attendance ?? []} colors={attendanceColors} /></Panel>
               </div>
               <div className="db-storage-grid">
                 <Panel title="板位使用狀況" className="db-storage-overview">
                   <SemicircleGauge value={occupied} step={4} unit="人" label="板位租用人數" />
                   <p className="db-capacity-note">目前容量 {capacity} 格 · 使用率 {capacity ? Math.round(occupied / capacity * 100) : 0}%</p>
                 </Panel>
-                <Panel title="容量與租用" className="db-control-panel">
-                  <div className="db-control-row"><Ring value={occupied} total={capacity} label="已租出版位" tone={boardTone} large /><div className="db-control-actions"><button type="button" aria-label="新增板位租用者" disabled={actionBusy || remaining === 0} onClick={() => { setOpen(o => ({ ...o, add: true })); document.getElementById("db-add-lease")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}><Plus size={17} /></button><button type="button" aria-label="從名單選擇退租" disabled={actionBusy || occupied === 0} onClick={() => { setRemoveMode(true); setOpen(o => ({ ...o, list: true })); document.getElementById("db-lease-list")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}><Minus size={17} /></button></div></div>
-                  <div className="db-control-row"><Ring value={remaining} total={capacity} label="剩餘板位" tone={1} large /><div className="db-control-actions"><button type="button" aria-label="增加一格總板位" disabled={actionBusy || capacity >= 10000} onClick={() => void mutate({ action: "capacity", delta: 1 }, "已增加一格板位。")}><Plus size={17} /></button><button type="button" aria-label="減少一格總板位" disabled={actionBusy || remaining === 0} onClick={() => void mutate({ action: "capacity", delta: -1 }, "已減少一格板位。")}><Minus size={17} /></button></div></div>
-                </Panel>
-                <div className="db-storage-details">
-                  <section className="db-panel db-fold" id="db-add-lease"><button className="db-fold-toggle" type="button" aria-expanded={open.add} onClick={() => setOpen(o => ({ ...o, add: !o.add }))}><span><strong>新增租用者</strong></span><ChevronDown size={19} /></button>
-                    {open.add && <form className="db-fold-body" onSubmit={e => void addLease(e)}>
+                <section className="db-panel db-control-panel" aria-label="已租出與剩餘板位">
+                  <div className="db-capacity-row">
+                    <div className="db-capacity-ring"><span>已租出板位</span><Ring value={occupied} total={capacity} label="已租出板位" tone={boardTone} large compact /></div>
+                    <div className="db-capacity-value"><strong>{occupied}<small>人</small></strong></div>
+                  </div>
+                  <div className="db-capacity-row">
+                    <div className="db-capacity-ring"><span>剩餘板位</span><Ring value={remaining} total={capacity} label="剩餘板位" tone={1} large compact /></div>
+                    <div className="db-capacity-value"><strong>{remaining}<small>格</small></strong>
+                      <div className="db-control-actions">
+                        <button type="button" aria-label="減少一格總板位" disabled={actionBusy || remaining === 0} onClick={() => void mutate({ action: "capacity", delta: -1 }, "已減少一格板位。")}><Minus size={17} /></button>
+                        <button type="button" aria-label="增加一格總板位" disabled={actionBusy || capacity >= 10000} onClick={() => void mutate({ action: "capacity", delta: 1 }, "已增加一格板位。")}><Plus size={17} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <section className="db-panel db-storage-tabs" aria-label="板位資訊">
+                  <div className="db-storage-tab-list" role="tablist" aria-label="板位管理功能">
+                    {storageTabs.map((tab, index) => <button key={tab.id} type="button" role="tab" id={"db-tab-" + tab.id} aria-controls={"db-panel-" + tab.id} aria-selected={storageTab === tab.id} tabIndex={storageTab === tab.id ? 0 : -1} onKeyDown={event => switchStorageTab(event, index)} onClick={() => setStorageTab(tab.id)}>
+                      {tab.label}{tab.id !== "add" && <span className="db-count">{tab.id === "list" ? occupied : unpaidLeases.length}</span>}
+                    </button>)}
+                  </div>
+                  <div className="db-storage-tab-body" role="tabpanel" id={"db-panel-" + storageTab} aria-labelledby={"db-tab-" + storageTab} tabIndex={0}>
+                    {storageTab === "add" && <form onSubmit={event => void addLease(event)}>
                       <div className="db-choice"><label><input type="radio" checked={renterType === "member"} onChange={() => { setRenterType("member"); setGuestName(""); }} /> 社員</label><label><input type="radio" checked={renterType === "guest"} onChange={() => { setRenterType("guest"); setSelected(null); setSearch(""); setMatches([]); }} /> 非社員</label></div>
-                      {renterType === "member" ? <div className="db-search"><label htmlFor="db-member-search">搜尋社員姓名</label><div className="db-input-icon"><Search size={16} /><input id="db-member-search" value={search} onChange={e => { setSearch(e.target.value); setSelected(null); }} placeholder="輸入姓名，從結果選擇" autoComplete="off" /></div>
-                        {selected ? <p className="db-selected">已選取：{selected.full_name} {selected.student_id && "· " + selected.student_id}</p> : search.trim() && <div className="db-results" role="listbox" aria-label="社員搜尋結果">{matches.length ? matches.map(m => <button type="button" role="option" aria-selected={false} key={m.id} onClick={() => { setSelected(m); setSearch(m.full_name); setMatches([]); }}>{m.full_name} <span>{m.student_id}</span></button>) : <p>沒有符合的社員</p>}</div>}</div>
-                      : <div className="db-search"><label htmlFor="db-guest-name">非社員姓名</label><input id="db-guest-name" value={guestName} maxLength={100} onChange={e => setGuestName(e.target.value)} placeholder="請填寫可辨識的姓名" required /></div>}
-                      <div className="db-search"><label htmlFor="db-start-date">起租日期</label><input id="db-start-date" type="date" max={getTaipeiDate()} value={startOn} onChange={e => setStartOn(e.target.value)} required /></div>
-                      <button className="db-primary-button" type="submit" disabled={actionBusy || remaining === 0}><Plus size={17} /> 新增板位租用</button>
+                      {renterType === "member" ? <div className="db-search"><label htmlFor="db-member-search">搜尋社員姓名</label><div className="db-input-icon"><Search size={16} /><input id="db-member-search" value={search} onChange={event => { setSearch(event.target.value); setSelected(null); }} placeholder="輸入姓名，從結果選擇" autoComplete="off" /></div>
+                        {selected ? <p className="db-selected">已選取：{selected.full_name} {selected.student_id && "· " + selected.student_id}</p> : search.trim() && <div className="db-results" role="listbox" aria-label="社員搜尋結果">{matches.length ? matches.map(member => <button type="button" role="option" aria-selected={false} key={member.id} onClick={() => { setSelected(member); setSearch(member.full_name); setMatches([]); }}>{member.full_name}<span>{member.student_id}</span></button>) : <p>沒有符合的社員</p>}</div>}</div>
+                      : <div className="db-search"><label htmlFor="db-guest-name">非社員姓名</label><input id="db-guest-name" value={guestName} maxLength={100} onChange={event => setGuestName(event.target.value)} placeholder="請填寫可辨識的姓名" required /></div>}
+                      <div className="db-search"><label htmlFor="db-start-date">起租日期</label><input id="db-start-date" type="date" max={getTaipeiDate()} value={startOn} onChange={event => setStartOn(event.target.value)} required /></div>
+                      <button className="db-primary-button" type="submit" disabled={actionBusy || remaining === 0}><Plus size={17} />新增板位租用</button>
                       {remaining === 0 && <p className="db-note">板位已滿，請先增加總板位。</p>}
                     </form>}
-                  </section>
-                  <section className="db-panel db-fold" id="db-lease-list"><button className="db-fold-toggle" type="button" aria-expanded={open.list} onClick={() => setOpen(o => ({ ...o, list: !o.list }))}><span><strong>板位名單 <span className="db-count">{occupied}</span></strong></span><ChevronDown size={19} /></button>
-                    {open.list && <div className="db-fold-body">{removeMode && <p className="db-hint">選擇要退租的人。<button type="button" onClick={() => setRemoveMode(false)}>取消</button></p>}{activeLeases.length ? <ul className="db-list">{activeLeases.map(l => <li key={l.id}><div><strong>{l.name}</strong><small>{l.type === "member" ? "社員" : "非社員"} · {dates(l.start_on)} — {dates(l.end_on)}{l.end_on <= data.today ? " · 已到期" : ""}</small></div>{removeMode ? <button type="button" className="db-danger-button" disabled={actionBusy} onClick={() => { if (window.confirm("確認為 " + l.name + " 辦理退租？紀錄會保留。")) void mutate({ action: "end", target_id: l.id }, "已辦理退租。").then(ok => { if (ok) setRemoveMode(false); }); }}>退租</button> : <span className={l.is_paid ? "db-paid" : "db-unpaid"}>{l.is_paid ? "已繳" : "未繳"}</span>}</li>)}</ul> : empty}</div>}
-                  </section>
-                  <section className="db-panel db-fold"><button className="db-fold-toggle" type="button" aria-expanded={open.unpaid} onClick={() => setOpen(o => ({ ...o, unpaid: !o.unpaid }))}><span><strong>未繳費資訊 <span className="db-count">{unpaidLeases.length}</span></strong></span><ChevronDown size={19} /></button>
-                    {open.unpaid && <div className="db-fold-body">{unpaidLeases.length ? <ul className="db-list">{unpaidLeases.map(l => <li key={l.id}><div><strong>{l.name}</strong><small>{l.type === "member" ? "社員" : "非社員"} · {dates(l.start_on)}{l.ended_at ? " · 已退租" : ""}</small></div><label className="db-check"><input type="checkbox" disabled={actionBusy} checked={false} onChange={() => void mutate({ action: "payment", target_id: l.id, paid: true }, "已標記繳費。")} /><span>已繳費</span></label></li>)}</ul> : <p className="db-empty">所有板位租用者都已繳費。</p>}</div>}
-                  </section>
-                </div>
+                    {storageTab === "list" && (activeLeases.length ? <ul className="db-list">{activeLeases.map(lease => <li key={lease.id}><div><strong>{lease.name}</strong><small>{lease.type === "member" ? "社員" : "非社員"} · {dates(lease.start_on)} — {dates(lease.end_on)}{lease.end_on <= data.today ? " · 已到期" : ""}</small></div><div className="db-lease-actions"><span className={lease.is_paid ? "db-paid" : "db-unpaid"}>{lease.is_paid ? "已繳" : "未繳"}</span><button type="button" className="db-danger-button" disabled={actionBusy} onClick={() => { if (window.confirm("確認為 " + lease.name + " 辦理退租？紀錄會保留。")) void mutate({ action: "end", target_id: lease.id }, "已辦理退租。"); }}>退租</button></div></li>)}</ul> : empty)}
+                    {storageTab === "unpaid" && (unpaidLeases.length ? <ul className="db-list">{unpaidLeases.map(lease => <li key={lease.id}><div><strong>{lease.name}</strong><small>{lease.type === "member" ? "社員" : "非社員"} · {dates(lease.start_on)}{lease.ended_at ? " · 已退租" : ""}</small></div><label className="db-check"><input type="checkbox" disabled={actionBusy} checked={false} onChange={() => void mutate({ action: "payment", target_id: lease.id, paid: true }, "已標記繳費。")} /><span>已繳費</span></label></li>)}</ul> : <p className="db-empty">目前沒有未繳費紀錄。</p>)}
+                  </div>
+                </section>
               </div>
             </>}
-            </div>
-          </>}
-        </div>
-      </div>
+          </div>
+        </>}
+      </div></div>
     </main>
   );
 }
-
