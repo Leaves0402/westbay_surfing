@@ -6,9 +6,7 @@
 }
 .db-content { max-width: 2000px; margin: 0 auto; padding: 14px 18px 28px; }
 .db-workspace { display: grid; gap: 10px; }
-.db-section-title, .db-toolbar-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
-.db-section-title h2 { font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
-.db-toolbar-actions { justify-content: flex-end; }
+.db-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; margin-bottom: 10px; flex: none; }
 .db-refresh, .db-month { display: inline-flex; align-items: center; gap: 8px; color: #c2e1e6; background: #112b39; border: 1px solid #315363; border-radius: 7px; }
 .db-refresh { min-height: 32px; padding: 0 10px; font-size: 13px; }
 .db-month { padding: 2px; }
@@ -31,14 +29,14 @@
 .db-eyebrow { color: #8eddd1; font-size: 14px; font-weight: 600; }
 .db-empty { color: #a1bfca; font-size: 14px; padding: 12px 0; }
 .db-rent-grid { display: grid; gap: 10px; min-width: 0; min-height: 0; }
-.db-income-panel, .db-daily-panel, .db-collector-panel { display: flex; flex-direction: column; }
+.db-income-panel, .db-daily-panel, .db-collector-panel, .db-storage-overview { display: flex; flex-direction: column; }
 .db-income-panel { min-height: 280px; }
 .db-daily-panel { min-height: 260px; }
-.db-revenue-gauge { display: flex; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center; }
-.db-revenue-gauge > svg { width: 100%; max-width: 400px; max-height: 240px; flex: 1; min-height: 0; }
-.db-revenue-total { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-top: 3px; line-height: 1.1; padding: 5px 0; }
-.db-revenue-total strong { font-size: clamp(32px, 3vw, 48px); color: #84f2d9; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
-.db-revenue-total span { color: #b6d6dc; font-size: 16px; }
+.db-semicircle-gauge { display: flex; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center; }
+.db-semicircle-gauge > svg { width: 100%; max-width: 400px; max-height: 240px; flex: 1; min-height: 0; }
+.db-gauge-total { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-top: 3px; line-height: 1.1; padding: 5px 0; }
+.db-gauge-total strong { font-size: clamp(32px, 3vw, 48px); color: #84f2d9; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.db-gauge-total span { color: #b6d6dc; font-size: 16px; }
 .db-chart-total { color: #a7f4df; font-size: 23px; line-height: 1.2; font-weight: 700; white-space: nowrap; }
 .db-chart-total small { color: #badbdc; font-size: 14px; font-weight: 400; margin-left: 6px; }
 .db-chart-scroll { width: 100%; flex: 1; min-height: 120px; overflow: hidden; }
@@ -65,13 +63,7 @@
 .db-collector .db-ring strong { font-size: 17px; }
 .db-storage-grid { display: grid; gap: 10px; min-height: 0; }
 .db-storage-overview, .db-control-panel { min-height: 300px; }
-.db-gauge-wrap { text-align: center; }
-.db-gauge { width: min(180px, 100%); aspect-ratio: 1; border-radius: 50%; margin: 9px auto; padding: 10px; display: grid; place-items: center; background: conic-gradient(from 220deg, var(--gauge-color) var(--gauge-deg), #294350 0 270deg, transparent 270deg); }
-.db-gauge-inner { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; background: #0f2432; border: 1px solid #2a4854; border-radius: 50%; width: 100%; height: 100%; }
-.db-gauge-inner strong { font-size: 34px; letter-spacing: -.04em; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.db-gauge-scale { display: flex; justify-content: center; gap: 5px; }
-.db-gauge-scale span { height: 4px; width: 24px; border-radius: 9px; }
-.db-capacity-note { margin-top: 12px; padding-top: 10px; text-align: center; border-top: 1px solid #2b4855; color: #b1d0d5; font-size: 14px; }
+.db-capacity-note { flex: none; margin-top: 12px; padding-top: 10px; text-align: center; border-top: 1px solid #2b4855; color: #b1d0d5; font-size: 14px; }
 .db-control-panel { display: flex; flex-direction: column; }
 .db-control-row { display: flex; align-items: center; justify-content: center; gap: 20px; border-top: 1px solid #284754; padding: 8px 0; min-height: 0; flex: 1; }
 .db-control-row:first-of-type { border-top: 0; }
@@ -131,24 +123,22 @@
   .db-shell > header { flex: none; }
   .db-page { flex: 1; min-height: 0; overflow: hidden; }
   .db-content { height: 100%; width: 100%; padding: 12px 18px; display: flex; flex-direction: column; }
-  .db-workspace { flex: 1; min-height: 0; grid-template-rows: 34px minmax(0, 1.15fr) 24px minmax(0, 1fr); }
+  .db-workspace { flex: 1; min-height: 0; grid-template-rows: repeat(2, minmax(0, 1fr)); }
   .db-rent-grid { grid-template-rows: minmax(0, 1fr) clamp(124px, 14vh, 144px); }
   .db-chart-scroll { min-height: 0; }
   .db-storage-grid { grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) minmax(340px, 1.65fr); align-items: stretch; }
   .db-storage-details { grid-column: auto; grid-template-columns: 1fr; overflow-y: auto; overscroll-behavior-y: contain; }
   .db-storage-overview, .db-control-panel { min-height: 0; height: 100%; overflow-y: auto; scrollbar-width: thin; }
-  .db-storage-overview .db-gauge { width: min(170px, 19vh); margin: 7px auto; }
   .db-capacity-note { margin-top: 9px; padding-top: 8px; }
   .db-ring-large .db-ring { width: clamp(58px, 10vh, 100px); height: clamp(58px, 10vh, 100px); }
   .db-control-row { padding: 2px 0; }
 }
 @media (max-width: 720px) {
   .db-content { padding: 12px 12px 28px; }
-  .db-section-title h2 { font-size: 17px; }
   .db-refresh span { display: none; }
   .db-refresh { padding: 0 8px; }
   .db-month strong { min-width: 80px; font-size: 14px; }
-  .db-toolbar-actions { gap: 6px; }
+  .db-toolbar { gap: 6px; }
   .db-collector-panel { height: 130px; }
   .db-storage-overview, .db-control-panel { min-height: 290px; }
 }
@@ -156,3 +146,4 @@
   .db-spin { animation: none; }
   .db-fold-toggle svg { transition: none; }
 }
+

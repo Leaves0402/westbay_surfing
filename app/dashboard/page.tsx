@@ -26,28 +26,9 @@ const swatches = ["#43bafa", "#73eac8", "#e8df7b", "#ffad65", "#fc7288"];
 const currency = (value: number) => "NT$ " + Math.round(value).toLocaleString("zh-TW");
 const dates = (value: string) => value.replaceAll("-", "/");
 
-function Gauge({ value, step, title, unit }: { value: number; step: number; title: string; unit: string }) {
-  const level = value <= 0 ? 0 : Math.min(5, Math.ceil(value / step));
-  const fraction = value <= 0 ? 0 : Math.min(1, (value - (level - 1) * step) / step);
-  const color = swatches[Math.max(0, level - 1)];
-  return (
-    <div className="db-gauge-wrap">
-      <div className="db-gauge" style={{ "--gauge-color": color, "--gauge-deg": String(fraction * 270) + "deg" } as React.CSSProperties}>
-        <div className="db-gauge-inner">
-          <span className="db-eyebrow">{title}</span>
-          <strong>{value.toLocaleString("zh-TW")}</strong>
-          <span className="db-muted">{unit}</span>
-        </div>
-      </div>
-      <div className="db-gauge-scale">
-        {swatches.map((shade, i) => <span key={shade} style={{ background: shade }} title={String((i + 1) * step)} />)}
-      </div>
-    </div>
-  );
-}
-
-function RevenueGauge({ value }: { value: number }) {
-  const fraction = Math.max(0, Math.min(1, value / 10000));
+function SemicircleGauge({ value, step, unit, label }: { value: number; step: number; unit: string; label: string }) {
+  const limit = step * 5;
+  const fraction = Math.max(0, Math.min(1, value / limit));
   const position = (fraction: number, radius: number) => ({
     x: 200 - radius * Math.cos(fraction * Math.PI),
     y: 190 - radius * Math.sin(fraction * Math.PI),
@@ -56,8 +37,8 @@ function RevenueGauge({ value }: { value: number }) {
     const a = position(start, 166), b = position(end, 166);
     return `M ${a.x} ${a.y} A 166 166 0 0 1 ${b.x} ${b.y}`;
   };
-  return <div className="db-revenue-gauge">
-    <svg viewBox="0 0 400 210" role="img" aria-label={`租板累積已收款 ${currency(value)}，每 2,000 元一色，刻度上限 10,000 元`}>
+  return <div className="db-semicircle-gauge">
+    <svg viewBox="0 0 400 210" role="img" aria-label={`${label} ${value.toLocaleString("zh-TW")} ${unit}，每 ${step.toLocaleString("zh-TW")} ${unit}一色，刻度上限 ${limit.toLocaleString("zh-TW")} ${unit}`}>
       <path d={arc(0, 1)} fill="none" stroke="#294451" strokeWidth="16" />
       {swatches.map((color, i) => <path key={color} d={arc(i / 5 + .003, (i + 1) / 5 - .003)} fill="none" stroke={color} strokeWidth="12" />)}
       {Array.from({ length: 21 }, (_, i) => {
@@ -65,14 +46,14 @@ function RevenueGauge({ value }: { value: number }) {
         const label = position(i / 20, 124);
         return <g key={i}>
           <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={major ? "#d0e7ee" : "#64848f"} strokeWidth={major ? 2 : 1} />
-          {major && <text x={label.x} y={label.y + 6} textAnchor="middle" fill="#bdd8e1" fontSize="18">{(i * 500).toLocaleString("zh-TW")}</text>}
+          {major && <text x={label.x} y={label.y + 6} textAnchor="middle" fill="#bdd8e1" fontSize="18">{(i * step / 4).toLocaleString("zh-TW")}</text>}
         </g>;
       })}
       <g transform={`rotate(${fraction * 180} 200 190)`} className="db-needle"><path d="M 76 190 L 200 184 L 211 190 L 200 196 Z" fill="#e1f5fb" /></g>
       <circle cx="200" cy="190" r="9" fill="#d4e9f0" stroke="#7b9eab" strokeWidth="3" />
       <circle cx="200" cy="190" r="3" fill="#456776" />
     </svg>
-    <div className="db-revenue-total"><strong>{value.toLocaleString("zh-TW")}</strong><span>元</span></div>
+    <div className="db-gauge-total"><strong>{value.toLocaleString("zh-TW")}</strong><span>{unit}</span></div>
   </div>;
 }
 
@@ -220,15 +201,15 @@ export default function DashboardPage() {
             {statusMessage && <p className="db-alert" role="alert">{statusMessage}</p>}
             {error && <p className="db-alert" role="alert">{error}</p>}
             {notice && <p className="db-success" role="status">{notice}</p>}
-            <div className="db-workspace">
-            <div className="db-section-title"><h2>租板營運</h2><div className="db-toolbar-actions">
+            <div className="db-toolbar" role="group" aria-label="月份與資料更新">
               <div className="db-month"><button aria-label="上個月" type="button" onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatMonth}</strong><button aria-label="下個月" type="button" disabled={month >= currentMonth} onClick={() => changeMonth(1)}><ChevronRight size={18} /></button></div>
               <button className="db-refresh" type="button" aria-label="更新資料" title="更新資料" disabled={busy || actionBusy} onClick={() => void reload(month)}><RefreshCw size={16} className={busy ? "db-spin" : ""} /><span>更新</span></button>
-            </div></div>
+            </div>
+            <div className="db-workspace">
             {!data ? <Panel title="租板資料">{busy ? <p className="db-empty">正在載入…</p> : empty}</Panel> : <>
               <div className="db-rent-grid" aria-busy={busy}>
                 <Panel title="租板累積收入" className="db-income-panel">
-                  <RevenueGauge value={data.income} />
+                  <SemicircleGauge value={data.income} step={2000} unit="元" label="租板累積已收款" />
                 </Panel>
                 <Panel title="每日租板人次" className="db-daily-panel" actions={<span className="db-chart-total">{data.monthly.total}<small>人次</small></span>}>
                   <TrendChart days={data.daily} />
@@ -245,10 +226,9 @@ export default function DashboardPage() {
                   </div>
                 </Panel>
               </div>
-              <div className="db-section-title db-storage-title"><h2>板位管理</h2></div>
               <div className="db-storage-grid">
                 <Panel title="板位使用狀況" className="db-storage-overview">
-                  <Gauge value={occupied} step={4} title="租用人數" unit="人" />
+                  <SemicircleGauge value={occupied} step={4} unit="人" label="板位租用人數" />
                   <p className="db-capacity-note">目前容量 {capacity} 格 · 使用率 {capacity ? Math.round(occupied / capacity * 100) : 0}%</p>
                 </Panel>
                 <Panel title="容量與租用" className="db-control-panel">
@@ -283,3 +263,4 @@ export default function DashboardPage() {
     </main>
   );
 }
+
