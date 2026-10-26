@@ -38,7 +38,7 @@
 .db-gauge-total { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-top: 3px; line-height: 1.1; padding: 5px 0; }
 .db-gauge-total strong { font-size: clamp(32px, 3vw, 48px); color: #84d9bd; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
 .db-gauge-total span { color: #b6d6dc; font-size: 16px; }
-.db-chart-total { color: #69d7c1; font-size: 23px; line-height: 1.2; font-weight: 700; white-space: nowrap; }
+.db-chart-total { color: #ff7900; font-size: 23px; line-height: 1.2; font-weight: 700; white-space: nowrap; }
 .db-chart-total small { color: #badbdc; font-size: 14px; font-weight: 400; margin-left: 6px; }
 .db-chart-scroll { width: 100%; flex: 1; min-height: 150px; overflow: visible; }
 .db-trend { display: block; width: 100%; height: 100%; outline: none; overflow: visible; }
@@ -61,11 +61,11 @@
 .db-collector .db-ring { width: 54px; height: 54px; padding: 5px; }
 .db-collector .db-ring strong { font-size: 16px; }
 .db-right-column { display: grid; grid-template-rows: 170px minmax(170px, 1fr); gap: 8px; min-height: 350px; }
-.db-academic-panel { display: flex; min-height: 0; padding: 7px 9px; }
+.db-academic-panel { position: relative; display: flex; min-height: 0; padding: 7px 9px; }
 .db-academic-panel .db-chart-scroll { min-height: 0; }
 .db-attendance-panel { min-height: 0; padding: 9px 11px; }
-.db-attendance-total { color: #b5abc9; font-size: 18px; font-weight: 700; white-space: nowrap; }
-.db-attendance-total small { margin-left: 4px; color: #c0dcff; font-size: 10px; font-weight: 400; }
+.db-attendance-total { color: #84d9bd; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.db-attendance-total small { margin-left: 4px; color: inherit; font-size: 10px; font-weight: 400; }
 .db-attendance-body { display: grid; grid-template-columns: minmax(75px, .9fr) minmax(0, 1.1fr); align-items: center; gap: 7px; flex: 1; min-height: 0; }
 .db-attendance-pie { display: block; width: 100%; height: 100%; min-height: 0; overflow: visible; }
 .db-attendance-pie path:hover { filter: brightness(1.12); }
@@ -74,8 +74,8 @@
 .db-attendance-legend li > span { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
 .db-attendance-legend li > span > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .db-attendance-legend i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.db-attendance-legend strong { color: #ffffff; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.db-attendance-legend small { margin-left: 3px; color: #c0dcff; font-size: 11px; font-weight: 400; }
+.db-attendance-legend strong { color: inherit; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.db-attendance-legend small { margin-left: 3px; color: inherit; font-size: 11px; font-weight: 400; }
 .db-storage-grid { display: grid; gap: 10px; min-height: 0; }
 .db-storage-overview, .db-control-panel { min-height: 300px; }
 .db-capacity-note { flex: none; margin-top: 9px; padding-top: 8px; text-align: center; border-top: 1px solid #16417c; color: #b1d0d5; font-size: 14px; }
@@ -201,3 +201,7 @@
 
 .db-gauge-band { filter: drop-shadow(0 0 1.5px currentColor); }
 .db-gauge-total strong { text-shadow: 0 0 12px color-mix(in srgb, currentColor 25%, transparent); }
+
+.db-daily-actions .db-chart-total small { color: inherit; }
+.db-academic-total { position: absolute; top: 7px; right: 11px; z-index: 1; pointer-events: none; color: #69d7c1; font-size: 18px; }
+.db-academic-total small { color: inherit; font-size: 11px; margin-left: 4px; }
