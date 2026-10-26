@@ -61,7 +61,7 @@
 .db-collector .db-ring { width: 54px; height: 54px; padding: 5px; }
 .db-collector .db-ring strong { font-size: 16px; }
 .db-right-column { display: grid; grid-template-rows: 170px minmax(170px, 1fr); gap: 8px; min-height: 350px; }
-.db-academic-panel { position: relative; display: flex; min-height: 0; padding: 7px 9px; }
+.db-academic-panel { position: relative; display: flex; flex-direction: column; min-height: 0; padding: 7px 9px; }
 .db-academic-panel .db-chart-scroll { min-height: 0; }
 .db-attendance-panel { min-height: 0; padding: 9px 11px; }
 .db-attendance-total { color: #84d9bd; font-size: 18px; font-weight: 700; white-space: nowrap; }
@@ -203,5 +203,8 @@
 .db-gauge-total strong { text-shadow: 0 0 12px color-mix(in srgb, currentColor 25%, transparent); }
 
 .db-daily-actions .db-chart-total small { color: inherit; }
-.db-academic-total { position: absolute; top: 7px; right: 11px; z-index: 1; pointer-events: none; color: #69d7c1; font-size: 18px; }
+.db-academic-total { pointer-events: none; color: #69d7c1; font-size: 18px; }
 .db-academic-total small { color: inherit; font-size: 11px; margin-left: 4px; }
+
+.db-academic-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; margin-bottom: 2px; }
+.db-academic-heading h2 { margin: 0; font-size: 13px; line-height: 1.4; font-weight: 650; }

@@ -107,7 +107,7 @@ function TrendChart({ days, month, monthly }: { days: Daily[]; month: string; mo
     const day = month.slice(0, 7) + "-" + String(index + 1).padStart(2, "0");
     return { day, count: counts.get(day) ?? null };
   });
-  const { width, height } = size, left = isEnglish ? 53 : (isMonthly ? 33 : 40), right = isEnglish ? 39 : (isMonthly ? 28 : 23), top = isMonthly ? 34 : 23, bottom = 28;
+  const { width, height } = size, left = isEnglish ? 53 : (isMonthly ? 33 : 40), right = isEnglish ? 39 : (isMonthly ? 28 : 23), top = 23, bottom = 28;
   const highest = Math.max(0, ...calendar.map(day => day.count ?? 0));
   const tickStep = isMonthly ? 15 : highest > 12 ? Math.ceil((highest + 1) / 12) * 3 : 3;
   const max = isMonthly ? Math.max(15, Math.ceil(highest / 15) * 15) : highest > 12 ? Math.ceil((highest + 1) / tickStep) * tickStep : 12;
@@ -327,7 +327,7 @@ export default function DashboardPage() {
                     </div>) : empty}
                   </div>
                 </section>
-                <div className="db-right-column"><section className="db-panel db-academic-panel" aria-label={t("學年度各月租板人次")}><span className="db-chart-total db-academic-total">{academicTotal}<small>{t("人次")}</small></span><TrendChart days={[]} month={data.month} monthly={data.academic_months ?? []} /></section><Panel title={t("板務出勤次數")} className="db-attendance-panel" actions={<span className="db-attendance-total">{attendanceTotal}<small>{isEnglish ? "sessions" : "次"}</small></span>}><AttendanceChart entries={data.attendance ?? []} colors={attendanceColors} /></Panel></div>
+                <div className="db-right-column"><section className="db-panel db-academic-panel" aria-label={t("學年度各月租板人次")}><div className="db-academic-heading"><h2>{t("每月租板人次")}</h2><span className="db-chart-total db-academic-total">{academicTotal}<small>{t("人次")}</small></span></div><TrendChart days={[]} month={data.month} monthly={data.academic_months ?? []} /></section><Panel title={t("板務出勤次數")} className="db-attendance-panel" actions={<span className="db-attendance-total">{attendanceTotal}<small>{isEnglish ? "sessions" : "次"}</small></span>}><AttendanceChart entries={data.attendance ?? []} colors={attendanceColors} /></Panel></div>
               </div>
               <div className="db-storage-grid">
                 <Panel title={t("板位使用狀況")} className="db-storage-overview">

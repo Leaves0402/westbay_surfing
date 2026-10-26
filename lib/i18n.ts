@@ -20,6 +20,7 @@ const englishUiText: Record<string, string> = {
   "租板資料": "Rental data",
   "租板累積收入": "Total rental income",
   "每日租板人次": "Daily rentals",
+  "每月租板人次": "Monthly rentals",
   "板務出勤次數": "Staff attendance",
   "板位使用狀況": "Storage usage",
   "租板累積已收款": "Rental payments received",
