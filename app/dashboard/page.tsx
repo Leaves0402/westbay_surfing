@@ -27,7 +27,8 @@ type Dashboard = {
   storage: { capacity: number; leases: Lease[] };
 };
 type MemberResult = { id: string; full_name: string; student_id: string | null };
-const swatches = ["#00c8ff", "#00ff89", "#fff500", "#ff7900", "#ff123f"];
+const swatches = ["#00c8ff", "#69d7c1", "#fff500", "#ff7900", "#ff123f"];
+const attendanceSwatches = ["#548fae", "#73a795", "#c6b46f", "#bf8b68", "#b77f8c"];
 const currency = (value: number) => "NT$ " + Math.round(value).toLocaleString("zh-TW");
 const dates = (value: string) => value.replaceAll("-", "/");
 
@@ -40,19 +41,20 @@ function SemicircleGauge({ value, step, unit, label }: { value: number; step: nu
     y: 190 - radius * Math.sin(fraction * Math.PI),
   });
   const arc = (start: number, end: number) => {
-    const a = position(start, 166), b = position(end, 166);
-    return `M ${a.x} ${a.y} A 166 166 0 0 1 ${b.x} ${b.y}`;
+    const a = position(start, 145), b = position(end, 145);
+    return `M ${a.x} ${a.y} A 145 145 0 0 1 ${b.x} ${b.y}`;
   };
   return <div className="db-semicircle-gauge">
-    <svg viewBox="0 0 400 210" role="img" aria-label={isEnglish ? `${t(label)}: ${value.toLocaleString("en-US")} ${t(unit)}. Each color represents ${step}; scale maximum ${limit}.` : `${label} ${value.toLocaleString("zh-TW")} ${unit}，每 ${step.toLocaleString("zh-TW")} ${unit}一色，刻度上限 ${limit.toLocaleString("zh-TW")} ${unit}`}>
+    <svg viewBox="0 -20 400 250" role="img" aria-label={isEnglish ? `${t(label)}: ${value.toLocaleString("en-US")} ${t(unit)}. Each color represents ${step}; scale maximum ${limit}.` : `${label} ${value.toLocaleString("zh-TW")} ${unit}，每 ${step.toLocaleString("zh-TW")} ${unit}一色，刻度上限 ${limit.toLocaleString("zh-TW")} ${unit}`}>
       <path d={arc(0, 1)} fill="none" stroke="#294451" strokeWidth="16" />
       {swatches.map((color, i) => <path key={color} d={arc(i / 5 + .003, (i + 1) / 5 - .003)} fill="none" stroke={color} strokeWidth="12" />)}
       {Array.from({ length: 21 }, (_, i) => {
-        const major = i % 4 === 0, a = position(i / 20, major ? 143 : 150), b = position(i / 20, 158);
-        const label = position(i / 20, 124);
+        const major = i % 4 === 0, a = position(i / 20, 162), b = position(i / 20, major ? 177 : 170);
+        const tickLabel = position(i / 20, 195);
+        const endpoint = i === 0 || i === 20;
         return <g key={i}>
           <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={major ? "#d0e7ee" : "#64848f"} strokeWidth={major ? 2 : 1} />
-          {major && <text x={label.x} y={label.y + 6} textAnchor="middle" fill="#bdd8e1" fontSize="18">{(i * step / 4).toLocaleString("zh-TW")}</text>}
+          {major && <text x={endpoint ? (i === 0 ? 14 : 386) : tickLabel.x} y={endpoint ? 218 : tickLabel.y + 6} textAnchor={endpoint ? (i === 0 ? "start" : "end") : "middle"} fill="#bdd8e1" fontSize="18">{(i * step / 4).toLocaleString("zh-TW")}</text>}
         </g>;
       })}
       <g transform={`rotate(${fraction * 180} 200 190)`} className="db-needle"><path d="M 76 190 L 200 184 L 211 190 L 200 196 Z" fill="#e1f5fb" /></g>
@@ -63,7 +65,7 @@ function SemicircleGauge({ value, step, unit, label }: { value: number; step: nu
   </div>;
 }
 
-function Ring({ value, total, label, tone = 0, large = false, compact = false }: { value: number; total: number; label: string; tone?: number; large?: boolean; compact?: boolean }) {
+function Ring({ value, total, label, tone = 0, large = false, compact = false, showBoard = false }: { value: number; total: number; label: string; tone?: number; large?: boolean; compact?: boolean; showBoard?: boolean }) {
   const { t } = useLanguage();
   const fraction = total ? Math.min(1, value / total) : 0;
   const percent = Math.round(fraction * 100);
@@ -71,7 +73,11 @@ function Ring({ value, total, label, tone = 0, large = false, compact = false }:
     <div className={large ? "db-ring-block db-ring-large" : "db-ring-block"}>
       <div className="db-ring" style={{ "--ring-color": swatches[tone % 5], "--ring-percent": String(percent) + "%" } as React.CSSProperties}
         role="img" aria-label={t(label) + " " + percent + "%"}>
-        <div><strong>{percent}%</strong>{!compact && <small>{value.toLocaleString("zh-TW")} / {total.toLocaleString("zh-TW")}</small>}</div>
+        <div>{showBoard ? <svg className="db-surfboard-icon" viewBox="0 0 40 64" aria-hidden="true" focusable="false">
+          <path d="M20 3C11 3 8 20 8 35c0 10 3 19 8 26h8c5-7 8-16 8-26C32 20 29 3 20 3Z" fill="#69d7c1" fillOpacity=".14" stroke="currentColor" strokeWidth="2.5" />
+          <path d="M20 7v49" stroke="currentColor" strokeWidth="1.5" opacity=".7" />
+          <path d="m20 43 8 9-8-3" fill="currentColor" opacity=".75" />
+        </svg> : <strong>{percent}%</strong>}{!compact && <small>{value.toLocaleString("zh-TW")} / {total.toLocaleString("zh-TW")}</small>}</div>
       </div>
       {!compact && <span className="db-ring-label">{t(label)}</span>}
     </div>
@@ -115,7 +121,7 @@ function TrendChart({ days, month, monthly }: { days: Daily[]; month: string; mo
   const tooltipWidth = isMonthly ? 124 : 140, tooltipHeight = isMonthly ? 42 : 48;
   const tooltipX = hoverIndex === null ? 0 : Math.max(left - 8, Math.min(width - tooltipWidth - 2, x(hoverIndex) - tooltipWidth / 2));
   const tooltipY = hasHover ? y(hovered!.count!) - tooltipHeight - 10 : 0;
-  const lineColor = isMonthly ? "#ff7900" : "#00ffc3";
+  const lineColor = isMonthly ? "#69d7c1" : "#ff7900";
   const gradientId = isMonthly ? "db-monthly-fill" : "db-daily-fill";
   const fontSize = isMonthly ? 12 : 14;
   const pointAt = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -174,7 +180,7 @@ function AttendanceChart({ entries, colors }: { entries: Attendance[]; colors: R
   const slices = activeEntries.map((entry, index) => {
     const start = -Math.PI / 2 + activeEntries.slice(0, index).reduce((sum, previous) => sum + previous.count, 0) / total * Math.PI * 2;
     const end = start + entry.count / total * Math.PI * 2;
-    return { entry, color: colors[entry.id] ?? "#91bfff", path: `M 120 68 L ${120 + 102 * Math.cos(start)} ${68 + 55 * Math.sin(start)} A 102 55 0 ${end - start > Math.PI ? 1 : 0} 1 ${120 + 102 * Math.cos(end)} ${68 + 55 * Math.sin(end)} Z` };
+    return { entry, color: colors[entry.id] ?? "#8295a5", path: `M 120 68 L ${120 + 102 * Math.cos(start)} ${68 + 55 * Math.sin(start)} A 102 55 0 ${end - start > Math.PI ? 1 : 0} 1 ${120 + 102 * Math.cos(end)} ${68 + 55 * Math.sin(end)} Z` };
   });
   const summary = entries.map(entry => displayName(entry) + " " + entry.count + " " + countUnit(entry.count)).join(", ");
   return <div className="db-attendance-body">
@@ -194,7 +200,7 @@ function AttendanceChart({ entries, colors }: { entries: Attendance[]; colors: R
           : <path key={entry.id} d={path} fill={color} stroke="#00101f" strokeWidth="1.5"><title>{title}</title></path>;
       })}
     </svg>
-    <ul className="db-attendance-legend">{entries.map(entry => <li key={entry.id}><span><i style={{ background: colors[entry.id] ?? "#91bfff" }} /><span translate="no">{displayName(entry)}</span></span><strong>{entry.count}<small>{isEnglish ? "×" : "次"}</small></strong></li>)}</ul>
+    <ul className="db-attendance-legend">{entries.map(entry => <li key={entry.id}><span><i style={{ background: colors[entry.id] ?? "#8295a5" }} /><span translate="no">{displayName(entry)}</span></span><strong>{entry.count}<small>{isEnglish ? "×" : "次"}</small></strong></li>)}</ul>
   </div>;
 }
 
@@ -220,8 +226,7 @@ export default function DashboardPage() {
   const [guestName, setGuestName] = useState("");
   const [startOn, setStartOn] = useState(getTaipeiDate());
   const [storageTab, setStorageTab] = useState<StorageTab>("list");
-  const collectorsRef = useRef<HTMLDivElement>(null);
-
+  
   const reload = useCallback(async (target: string) => {
     setBusy(true); setError("");
     const { data: payload, error: requestError } = await createClient().rpc("get_operations_dashboard", { target_month: target + "-01" });
@@ -282,8 +287,8 @@ export default function DashboardPage() {
 
   const collectors = useMemo(() => [...(data?.collectors ?? [])].sort((a, b) => Number(b.role === "board_manager") - Number(a.role === "board_manager") || b.amount - a.amount || a.name.localeCompare(b.name, "zh-TW")), [data]);
   const attendanceColors = useMemo(() => {
-    const colors: Record<string, string> = { staff: "#bb32ff", unassigned: "#91bfff" };
-    collectors.filter(collector => collector.role === "board_manager").forEach((collector, index) => { if (collector.id) colors[collector.id] = swatches[index % 5]; });
+    const colors: Record<string, string> = { staff: "#8b929c", unassigned: "#8295a5" };
+    collectors.filter(collector => collector.role === "board_manager").forEach((collector, index) => { if (collector.id) colors[collector.id] = attendanceSwatches[index % attendanceSwatches.length]; });
     return colors;
   }, [collectors]);
   const collectorName = (collector: Collector) => collector.id === null ? t("未記錄收款人") : collector.name === "未填姓名" ? t("未填姓名") : collector.name;
@@ -313,14 +318,12 @@ export default function DashboardPage() {
                 <Panel title={t("租板累積收入")} className="db-income-panel"><SemicircleGauge value={data.income} step={2000} unit="元" label={t("租板累積已收款")} /></Panel>
                 <Panel title={t("每日租板人次")} className="db-daily-panel" actions={<div className="db-daily-actions"><div className="db-month"><button aria-label={t("上個月")} type="button" disabled={busy} onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatMonth}</strong><button aria-label={t("下個月")} type="button" disabled={busy || month >= currentMonth} onClick={() => changeMonth(1)}><ChevronRight size={18} /></button></div><span className="db-chart-total">{data.monthly.total}<small>{t("人次")}</small></span></div>}><TrendChart days={data.daily} month={data.month} /></Panel>
                 <section className="db-panel db-collector-panel" aria-label={t("各人員收款")}>
-                  <button className="db-carousel-edge" type="button" aria-label={t("向左查看收款人員")} onClick={() => collectorsRef.current?.scrollBy({ left: -420, behavior: "smooth" })}><ChevronLeft size={18} /></button>
-                  <div className="db-collector-grid" ref={collectorsRef} tabIndex={0} role="region" aria-label={t("收款人員，板務在前，可左右捲動")}>
+                  <div className="db-collector-grid" tabIndex={0} role="region" aria-label={t("收款人員，板務在前，可左右捲動")}>
                     {collectors.length ? collectors.map((collector, index) => <div className="db-collector" key={collector.id ?? "unknown"} title={collectorName(collector) + ": " + currency(collector.amount)}>
                       <Ring value={collector.amount} total={data.income} label={collectorName(collector)} tone={index} compact />
-                      <div className="db-collector-info"><span translate="no">{collectorName(collector)}</span><strong style={{ color: swatches[index % 5] }}>{currency(collector.amount)}</strong></div>
+                      <div className="db-collector-info"><span translate="no">{collectorName(collector)}</span><strong>{currency(collector.amount)}</strong></div>
                     </div>) : empty}
                   </div>
-                  <button className="db-carousel-edge" type="button" aria-label={t("向右查看收款人員")} onClick={() => collectorsRef.current?.scrollBy({ left: 420, behavior: "smooth" })}><ChevronRight size={18} /></button>
                 </section>
                 <div className="db-right-column"><section className="db-panel db-academic-panel" aria-label={t("學年度各月租板人次")}><TrendChart days={[]} month={data.month} monthly={data.academic_months ?? []} /></section><Panel title={t("板務出勤次數")} className="db-attendance-panel" actions={<span className="db-attendance-total">{attendanceTotal}<small>{isEnglish ? "sessions" : "次"}</small></span>}><AttendanceChart entries={data.attendance ?? []} colors={attendanceColors} /></Panel></div>
               </div>
@@ -331,11 +334,11 @@ export default function DashboardPage() {
                 </Panel>
                 <section className="db-panel db-control-panel" aria-label={t("已租出與剩餘板位")}>
                   <div className="db-capacity-row">
-                    <div className="db-capacity-ring"><span>{t("已租出板位")}</span><Ring value={occupied} total={capacity} label={t("已租出板位")} tone={boardTone} large compact /></div>
+                    <div className="db-capacity-ring"><span>{t("已租出板位")}</span><Ring value={occupied} total={capacity} label={t("已租出板位")} tone={boardTone} large compact showBoard /></div>
                     <div className="db-capacity-value"><strong>{occupied}<small>{t("人")}</small></strong></div>
                   </div>
                   <div className="db-capacity-row">
-                    <div className="db-capacity-ring"><span>{t("剩餘板位")}</span><Ring value={remaining} total={capacity} label={t("剩餘板位")} tone={1} large compact /></div>
+                    <div className="db-capacity-ring"><span>{t("剩餘板位")}</span><Ring value={remaining} total={capacity} label={t("剩餘板位")} tone={1} large compact showBoard /></div>
                     <div className="db-capacity-value"><strong>{remaining}<small>{t("格")}</small></strong>
                       <div className="db-control-actions">
                         <button type="button" aria-label={t("減少一格總板位")} disabled={actionBusy || remaining === 0} onClick={() => void mutate({ action: "capacity", delta: -1 }, "已減少一格板位。")}><Minus size={17} /></button>
