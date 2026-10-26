@@ -11,6 +11,10 @@ const englishUiText: Record<string, string> = {
   "已到期": "Expired",
   "退租": "End lease",
   "已退租": "Lease ended",
+  "沒有權限": "Access denied",
+  "板位資訊僅限幹部與管理員查看": "Storage information is restricted to officers and admins",
+  "此頁僅供板務、幹部與管理員查看。": "This page is restricted to board managers, officers and admins.",
+  "只有板務、幹部與管理員可以查看儀錶板。": "Only board managers, officers and admins can view the dashboard.",
   // Operations dashboard
   "營運儀錶板": "Operations Dashboard",
   "租板金流、板位管理與收款統計": "Rental income, storage and collections",

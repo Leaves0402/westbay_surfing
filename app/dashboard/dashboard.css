@@ -208,3 +208,19 @@
 
 .db-academic-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; margin-bottom: 2px; }
 .db-academic-heading h2 { margin: 0; font-size: 13px; line-height: 1.4; font-weight: 650; }
+
+.db-storage-locked { position: relative; min-width: 0; min-height: 360px; border-radius: 11px; overflow: hidden; }
+.db-storage-ghost { height: 100%; pointer-events: none; user-select: none; opacity: .48; filter: blur(2px); }
+.db-storage-mask { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 8, 23, .35); backdrop-filter: blur(4px); border: 1px solid #164d9b; border-radius: 11px; text-align: center; padding: 20px; }
+.db-storage-mask > svg { color: #c3dae6; margin-bottom: 2px; }
+.db-storage-mask h2 { margin: 0; color: #e9f7fb; font-size: 20px; font-weight: 600; }
+.db-storage-mask p { color: #a1b6c7; font-size: 14px; line-height: 1.5; }
+.db-ghost-gauge { width: 72%; aspect-ratio: 2; border: 9px solid #568fa2; border-bottom: 0; border-radius: 180px 180px 0 0; margin: auto auto 10px; }
+.db-ghost-ring { width: 74px; height: 74px; border-radius: 50%; border: 7px solid #52958d; }
+.db-ghost-bar { display: block; width: 70px; height: 12px; border-radius: 5px; background: #4c738b; }
+.db-ghost-number { margin: 20px auto; width: 85px; height: 26px; }
+.db-ghost-tabs { display: flex; justify-content: space-around; padding: 15px 5px; border-bottom: 1px solid #33567e; font-size: 14px; }
+.db-ghost-rows { padding: 8px 20px; }
+.db-ghost-rows > div { display: flex; align-items: center; justify-content: space-between; padding: 19px 0; border-bottom: 1px solid #2b4261; }
+.db-ghost-rows > div > span:first-child { width: 40%; }
+@media (min-width: 1024px) { .db-storage-locked { min-height: 0; } }

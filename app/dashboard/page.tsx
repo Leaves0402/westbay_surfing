@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Minus, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, EyeOff, Minus, Plus, Search } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useLanguage } from "@/components/LanguageProvider";
-import { canViewOperationsDashboard } from "@/lib/permissions";
+import { canViewBoardStorage, canViewOperationsDashboard } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import { getTaipeiDate } from "@/lib/taipeiTime";
 import { useAuthProfile } from "@/lib/useAuthProfile";
@@ -24,7 +24,7 @@ type Dashboard = {
   today: string; month: string; through: string; income: number;
   collectors: Collector[]; daily: Daily[]; attendance: Attendance[]; academic_months: MonthlyTotal[];
   monthly: { total: number; members: number; guests: number; unpaid: number };
-  storage: { capacity: number; leases: Lease[] };
+  storage: { capacity: number; leases: Lease[] } | null;
 };
 type MemberResult = { id: string; full_name: string; student_id: string | null };
 const swatches = ["#00c8ff", "#69d7c1", "#fff500", "#ff7900", "#ff123f"];
@@ -210,10 +210,23 @@ function Panel({ title, children, className = "", actions }: { title: string; ch
   return <section className={"db-panel " + className}><div className="db-panel-heading"><h2>{t(title)}</h2>{actions ?? <span className="db-panel-dot" />}</div>{children}</section>;
 }
 
+function StorageAccessDenied() {
+  const { t } = useLanguage();
+  return <section className="db-storage-locked" aria-labelledby="db-storage-denied-title">
+    <div className="db-storage-grid db-storage-ghost" aria-hidden="true" inert>
+      <div className="db-panel db-storage-overview"><div className="db-panel-heading"><h2>{t("板位使用狀況")}</h2></div><div className="db-ghost-gauge" /><div className="db-ghost-bar db-ghost-number" /></div>
+      <div className="db-panel db-control-panel">{["已租出板位", "剩餘板位"].map(label => <div className="db-capacity-row" key={label}><div className="db-capacity-ring"><span>{t(label)}</span><div className="db-ghost-ring" /></div><div className="db-ghost-bar" /></div>)}</div>
+      <div className="db-panel db-storage-tabs"><div className="db-ghost-tabs">{storageTabs.map(tab => <span key={tab.id}>{t(tab.label)}</span>)}</div><div className="db-ghost-rows">{[0, 1, 2, 3].map(index => <div key={index}><span className="db-ghost-bar" /><span className="db-ghost-bar" /></div>)}</div></div>
+    </div>
+    <div className="db-storage-mask"><EyeOff size={48} strokeWidth={1.6} aria-hidden="true" /><h2 id="db-storage-denied-title">{t("沒有權限")}</h2><p>{t("板位資訊僅限幹部與管理員查看")}</p></div>
+  </section>;
+}
+
 export default function DashboardPage() {
   const { isEnglish, t } = useLanguage();
   const { user, profile, isLoading, statusMessage, handleGoogleLogin, handleLogout } = useAuthProfile();
   const allowed = canViewOperationsDashboard(profile);
+  const storageAllowed = canViewBoardStorage(profile);
   const [month, setMonth] = useState(() => getTaipeiDate().slice(0, 7));
   const [data, setData] = useState<Dashboard | null>(null);
   const [busy, setBusy] = useState(false);
@@ -236,19 +249,20 @@ export default function DashboardPage() {
     setBusy(false);
   }, []);
 
-  useEffect(() => { if (!allowed) return; const timer = window.setTimeout(() => void reload(month), 0); return () => window.clearTimeout(timer); }, [allowed, month, reload]);
+  useEffect(() => { if (!allowed) return; const timer = window.setTimeout(() => void reload(month), 0); return () => window.clearTimeout(timer); }, [allowed, month, profile?.role, reload]);
 
   useEffect(() => {
-    if (!allowed || renterType !== "member" || !search.trim() || selected) return;
+    if (!storageAllowed || renterType !== "member" || !search.trim() || selected) return;
     let active = true;
     const timer = window.setTimeout(async () => {
       const { data: result, error: requestError } = await createClient().rpc("search_board_storage_members", { search_term: search.trim() });
       if (active) { setMatches(requestError ? [] : (result as MemberResult[])); if (requestError) setError(requestError.message); }
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [allowed, renterType, search, selected]);
+  }, [storageAllowed, renterType, search, selected]);
 
   const mutate = async (args: Record<string, unknown>, done: string) => {
+    if (!storageAllowed) { setError("沒有權限"); return false; }
     setActionBusy(true); setError(""); setNotice("");
     const { error: requestError } = await createClient().rpc("manage_board_storage", args);
     if (requestError) setError(requestError.message);
@@ -276,9 +290,9 @@ export default function DashboardPage() {
     const d = new Date(Date.UTC(year, numericMonth - 1 + delta, 1));
     setMonth(d.toISOString().slice(0, 7));
   };
-  const activeLeases = data?.storage.leases.filter(l => !l.ended_at) ?? [];
-  const unpaidLeases = data?.storage.leases.filter(l => !l.is_paid) ?? [];
-  const capacity = data?.storage.capacity ?? 0;
+  const activeLeases = data?.storage?.leases.filter(l => !l.ended_at) ?? [];
+  const unpaidLeases = data?.storage?.leases.filter(l => !l.is_paid) ?? [];
+  const capacity = data?.storage?.capacity ?? 0;
   const occupied = activeLeases.length;
   const remaining = Math.max(0, capacity - occupied);
   const currentMonth = getTaipeiDate().slice(0, 7);
@@ -309,7 +323,7 @@ export default function DashboardPage() {
       <div className="db-page" data-i18n-ignore><div className="db-content">
         {isLoading ? <p className="db-access">{t("正在確認登入身分…")}</p>
         : !user ? <p className="db-access">{t("請登入後查看營運儀錶板。")}</p>
-        : !allowed ? <p className="db-access">{t("此頁僅供幹部與管理員查看。")}</p>
+        : !allowed ? <p className="db-access">{t("此頁僅供板務、幹部與管理員查看。")}</p>
         : <>
           {statusMessage && <p className="db-alert" role="alert">{t(statusMessage)}</p>}
           {error && <p className="db-alert" role="alert">{t(error)}</p>}
@@ -329,7 +343,7 @@ export default function DashboardPage() {
                 </section>
                 <div className="db-right-column"><section className="db-panel db-academic-panel" aria-label={t("學年度各月租板人次")}><div className="db-academic-heading"><h2>{t("每月租板人次")}</h2><span className="db-chart-total db-academic-total">{academicTotal}<small>{t("人次")}</small></span></div><TrendChart days={[]} month={data.month} monthly={data.academic_months ?? []} /></section><Panel title={t("板務出勤次數")} className="db-attendance-panel" actions={<span className="db-attendance-total">{attendanceTotal}<small>{isEnglish ? "sessions" : "次"}</small></span>}><AttendanceChart entries={data.attendance ?? []} colors={attendanceColors} /></Panel></div>
               </div>
-              <div className="db-storage-grid">
+              {storageAllowed && data.storage ? <div className="db-storage-grid">
                 <Panel title={t("板位使用狀況")} className="db-storage-overview">
                   <SemicircleGauge value={occupied} step={4} unit="人" label={t("板位租用人數")} />
                   <p className="db-capacity-note">{isEnglish ? `Capacity ${capacity} spaces · Utilization ${capacity ? Math.round(occupied / capacity * 100) : 0}%` : `目前容量 ${capacity} 格 · 使用率 ${capacity ? Math.round(occupied / capacity * 100) : 0}%`}</p>
@@ -369,7 +383,7 @@ export default function DashboardPage() {
                     {storageTab === "unpaid" && (unpaidLeases.length ? <ul className="db-list">{unpaidLeases.map(lease => <li key={lease.id}><div><strong translate="no">{lease.name}</strong><small>{lease.type === "member" ? t("社員") : t("非社員")} · {dates(lease.start_on)}{lease.ended_at ? " · " + t("已退租") : ""}</small></div><label className="db-check"><input type="checkbox" disabled={actionBusy} checked={false} onChange={() => void mutate({ action: "payment", target_id: lease.id, paid: true }, "已標記繳費。")} /><span>{t("已繳費")}</span></label></li>)}</ul> : <p className="db-empty">{t("目前沒有未繳費紀錄。")}</p>)}
                   </div>
                 </section>
-              </div>
+              </div> : <StorageAccessDenied />}
             </>}
           </div>
         </>}
