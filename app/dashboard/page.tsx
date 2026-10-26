@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Minus, Plus, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus, Search } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { useLanguage } from "@/components/LanguageProvider";
 import { canViewOperationsDashboard } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import { getTaipeiDate } from "@/lib/taipeiTime";
@@ -14,22 +15,24 @@ type Attendance = { id: string; name: string; count: number };
 type StorageTab = "add" | "list" | "unpaid";
 const storageTabs: { id: StorageTab; label: string }[] = [{ id: "add", label: "新增租用者" }, { id: "list", label: "板位名單" }, { id: "unpaid", label: "未繳費資訊" }];
 type Daily = { day: string; count: number };
+type MonthlyTotal = { month: string; count: number | null };
 type Lease = {
   id: string; member_id: string | null; name: string; type: "member" | "guest";
   start_on: string; end_on: string; is_paid: boolean; ended_at: string | null;
 };
 type Dashboard = {
   today: string; month: string; through: string; income: number;
-  collectors: Collector[]; daily: Daily[]; attendance: Attendance[];
+  collectors: Collector[]; daily: Daily[]; attendance: Attendance[]; academic_months: MonthlyTotal[];
   monthly: { total: number; members: number; guests: number; unpaid: number };
   storage: { capacity: number; leases: Lease[] };
 };
 type MemberResult = { id: string; full_name: string; student_id: string | null };
-const swatches = ["#43bafa", "#73eac8", "#e8df7b", "#ffad65", "#fc7288"];
+const swatches = ["#00c8ff", "#00ff89", "#fff500", "#ff7900", "#ff123f"];
 const currency = (value: number) => "NT$ " + Math.round(value).toLocaleString("zh-TW");
 const dates = (value: string) => value.replaceAll("-", "/");
 
 function SemicircleGauge({ value, step, unit, label }: { value: number; step: number; unit: string; label: string }) {
+  const { isEnglish, t } = useLanguage();
   const limit = step * 5;
   const fraction = Math.max(0, Math.min(1, value / limit));
   const position = (fraction: number, radius: number) => ({
@@ -41,7 +44,7 @@ function SemicircleGauge({ value, step, unit, label }: { value: number; step: nu
     return `M ${a.x} ${a.y} A 166 166 0 0 1 ${b.x} ${b.y}`;
   };
   return <div className="db-semicircle-gauge">
-    <svg viewBox="0 0 400 210" role="img" aria-label={`${label} ${value.toLocaleString("zh-TW")} ${unit}，每 ${step.toLocaleString("zh-TW")} ${unit}一色，刻度上限 ${limit.toLocaleString("zh-TW")} ${unit}`}>
+    <svg viewBox="0 0 400 210" role="img" aria-label={isEnglish ? `${t(label)}: ${value.toLocaleString("en-US")} ${t(unit)}. Each color represents ${step}; scale maximum ${limit}.` : `${label} ${value.toLocaleString("zh-TW")} ${unit}，每 ${step.toLocaleString("zh-TW")} ${unit}一色，刻度上限 ${limit.toLocaleString("zh-TW")} ${unit}`}>
       <path d={arc(0, 1)} fill="none" stroke="#294451" strokeWidth="16" />
       {swatches.map((color, i) => <path key={color} d={arc(i / 5 + .003, (i + 1) / 5 - .003)} fill="none" stroke={color} strokeWidth="12" />)}
       {Array.from({ length: 21 }, (_, i) => {
@@ -56,48 +59,51 @@ function SemicircleGauge({ value, step, unit, label }: { value: number; step: nu
       <circle cx="200" cy="190" r="9" fill="#d4e9f0" stroke="#7b9eab" strokeWidth="3" />
       <circle cx="200" cy="190" r="3" fill="#456776" />
     </svg>
-    <div className="db-gauge-total"><strong>{value.toLocaleString("zh-TW")}</strong><span>{unit}</span></div>
+    <div className="db-gauge-total"><strong>{value.toLocaleString("zh-TW")}</strong><span>{t(unit)}</span></div>
   </div>;
 }
 
 function Ring({ value, total, label, tone = 0, large = false, compact = false }: { value: number; total: number; label: string; tone?: number; large?: boolean; compact?: boolean }) {
+  const { t } = useLanguage();
   const fraction = total ? Math.min(1, value / total) : 0;
   const percent = Math.round(fraction * 100);
   return (
     <div className={large ? "db-ring-block db-ring-large" : "db-ring-block"}>
       <div className="db-ring" style={{ "--ring-color": swatches[tone % 5], "--ring-percent": String(percent) + "%" } as React.CSSProperties}
-        role="img" aria-label={label + " " + percent + "%"}>
+        role="img" aria-label={t(label) + " " + percent + "%"}>
         <div><strong>{percent}%</strong>{!compact && <small>{value.toLocaleString("zh-TW")} / {total.toLocaleString("zh-TW")}</small>}</div>
       </div>
-      {!compact && <span className="db-ring-label">{label}</span>}
+      {!compact && <span className="db-ring-label">{t(label)}</span>}
     </div>
   );
 }
 
-function TrendChart({ days, month }: { days: Daily[]; month: string }) {
+function TrendChart({ days, month, monthly }: { days: Daily[]; month: string; monthly?: MonthlyTotal[] }) {
+  const { isEnglish, t } = useLanguage();
+  const isMonthly = monthly !== undefined;
   const chartRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 760, height: 240 });
+  const [size, setSize] = useState({ width: isMonthly ? 300 : 760, height: isMonthly ? 150 : 240 });
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   useEffect(() => {
     const element = chartRef.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
-      setSize({ width: Math.max(280, entry.contentRect.width), height: Math.max(125, entry.contentRect.height) });
+      setSize({ width: Math.max(200, entry.contentRect.width), height: Math.max(isMonthly ? 100 : 125, entry.contentRect.height) });
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [isMonthly]);
   const [year, numericMonth] = month.slice(0, 7).split("-").map(Number);
-  const count = new Date(Date.UTC(year, numericMonth, 0)).getUTCDate();
+  const dayCount = new Date(Date.UTC(year, numericMonth, 0)).getUTCDate();
   const counts = new Map(days.map(day => [day.day, day.count]));
-  const calendar = Array.from({ length: count }, (_, index) => {
+  const calendar = isMonthly ? monthly!.map(item => ({ day: item.month, count: item.count })) : Array.from({ length: dayCount }, (_, index) => {
     const day = month.slice(0, 7) + "-" + String(index + 1).padStart(2, "0");
     return { day, count: counts.get(day) ?? null };
   });
-  const { width, height } = size, left = 40, right = 20, top = 23, bottom = 30;
-  const highest = Math.max(0, ...days.map(day => day.count));
-  const tickStep = highest > 12 ? Math.ceil((highest + 1) / 12) * 3 : 3;
-  const max = highest > 12 ? Math.ceil((highest + 1) / tickStep) * tickStep : 12;
+  const { width, height } = size, left = isEnglish ? 53 : (isMonthly ? 33 : 40), right = isEnglish ? 39 : (isMonthly ? 28 : 23), top = 23, bottom = 28;
+  const highest = Math.max(0, ...calendar.map(day => day.count ?? 0));
+  const tickStep = isMonthly ? 15 : highest > 12 ? Math.ceil((highest + 1) / 12) * 3 : 3;
+  const max = isMonthly ? Math.max(15, Math.ceil(highest / 15) * 15) : highest > 12 ? Math.ceil((highest + 1) / tickStep) * tickStep : 12;
   const y = (value: number) => top + (height - top - bottom) * (1 - value / max);
   const x = (index: number) => left + (width - left - right) * index / Math.max(1, calendar.length - 1);
   const actual = calendar.flatMap((day, index) => day.count === null ? [] : [{ ...day, index, count: day.count }]);
@@ -106,14 +112,18 @@ function TrendChart({ days, month }: { days: Daily[]; month: string }) {
   const ticks = Array.from({ length: max / tickStep + 1 }, (_, index) => index * tickStep);
   const hovered = hoverIndex === null ? null : calendar[hoverIndex];
   const hasHover = hovered?.count !== null && hovered?.count !== undefined;
-  const tooltipX = hoverIndex === null ? 0 : Math.max(left, Math.min(width - 151, x(hoverIndex) - 69));
-  const tooltipY = hasHover ? y(hovered!.count!) - 58 : 0;
+  const tooltipWidth = isMonthly ? 124 : 140, tooltipHeight = isMonthly ? 42 : 48;
+  const tooltipX = hoverIndex === null ? 0 : Math.max(left - 8, Math.min(width - tooltipWidth - 2, x(hoverIndex) - tooltipWidth / 2));
+  const tooltipY = hasHover ? y(hovered!.count!) - tooltipHeight - 10 : 0;
+  const lineColor = isMonthly ? "#ff7900" : "#00ffc3";
+  const gradientId = isMonthly ? "db-monthly-fill" : "db-daily-fill";
+  const fontSize = isMonthly ? 12 : 14;
   const pointAt = (event: React.PointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const offset = (event.clientX - rect.left) * width / rect.width;
     if (offset < left || offset > width - right) { setHoverIndex(null); return; }
     const index = Math.max(0, Math.min(calendar.length - 1, Math.round((offset - left) / (width - left - right) * (calendar.length - 1))));
-    setHoverIndex(calendar[index].count === null ? null : index);
+    setHoverIndex(calendar[index]?.count === null ? null : index);
   };
   const moveKeyboard = (event: React.KeyboardEvent<SVGSVGElement>) => {
     if (event.key === "Escape") { setHoverIndex(null); return; }
@@ -122,60 +132,79 @@ function TrendChart({ days, month }: { days: Daily[]; month: string }) {
     const last = actual[actual.length - 1].index;
     setHoverIndex(current => event.key === "Home" ? 0 : event.key === "End" ? last : Math.max(0, Math.min(last, (current ?? 0) + (event.key === "ArrowRight" ? 1 : -1))));
   };
+  const chartLabel = isMonthly
+    ? (isEnglish ? "Monthly board rentals from September to June. Use arrow keys to inspect monthly totals." : "9月至隔年6月租板人次，可用左右方向鍵查看月份與人次")
+    : (isEnglish ? `Daily board rentals for ${year}/${numericMonth}, ${dayCount} days. Use arrow keys to inspect dates and counts.` : `每日租板人次，${year} 年 ${numericMonth} 月，共 ${dayCount} 天；可用左右方向鍵查看日期與人次`);
   return <div className="db-chart-scroll" ref={chartRef}>
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" tabIndex={0}
-      aria-label={`每日租板人次，${year} 年 ${numericMonth} 月，共 ${count} 天；可用左右方向鍵查看日期與人次`}
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" tabIndex={0} aria-label={chartLabel}
       onPointerMove={pointAt} onPointerLeave={() => setHoverIndex(null)}
       onFocus={event => { if (event.currentTarget.matches(":focus-visible")) setHoverIndex(current => current ?? (actual.length ? 0 : null)); }}
-      onBlur={() => setHoverIndex(null)} onKeyDown={moveKeyboard} className="db-trend">
-      <defs><linearGradient id="db-line-fill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#4de6d2" stopOpacity=".2" /><stop offset="1" stopColor="#4de6d2" stopOpacity="0" /></linearGradient></defs>
-      <text x="1" y="15" fill="#b4d5df" fontSize="14">人次</text>
-      {ticks.map(value => <g key={value}><line x1={left} x2={width - right} y1={y(value)} y2={y(value)} stroke="#35525f" strokeDasharray="3 6" /><text x={left - 12} y={y(value) + 5} textAnchor="end" fill="#accbd6" fontSize="14">{value}</text></g>)}
-      {calendar.map((day, index) => (index + 1) % 5 === 0 && <g key={day.day}>
-        <line x1={x(index)} x2={x(index)} y1={top} y2={y(0)} stroke="#284957" strokeDasharray="3 6" />
-        <text x={x(index)} y={height - 7} textAnchor="middle" fill="#accbd6" fontSize="14">{index + 1}</text>
+      onBlur={() => setHoverIndex(null)} onKeyDown={moveKeyboard} className={isMonthly ? "db-trend db-monthly-trend" : "db-trend"}>
+      <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop stopColor={lineColor} stopOpacity=".25" /><stop offset="1" stopColor={lineColor} stopOpacity="0" /></linearGradient></defs>
+      <text x="1" y="14" fill="#d0edff" fontSize={fontSize}>{t("人次")}</text>
+      {ticks.map(value => <g key={value}><line x1={left} x2={width - right} y1={y(value)} y2={y(value)} stroke="#1b497c" strokeDasharray="3 6" /><text x={left - 10} y={y(value) + 4} textAnchor="end" fill="#c9e4ff" fontSize={fontSize}>{value}</text></g>)}
+      {calendar.map((day, index) => (isMonthly ? index % 3 === 0 : (index + 1) % 5 === 0) && <g key={day.day}>
+        <line x1={x(index)} x2={x(index)} y1={top} y2={y(0)} stroke="#12345d" strokeDasharray="3 6" />
+        <text x={x(index)} y={height - 6} textAnchor="middle" fill="#c9e4ff" fontSize={fontSize}>{isMonthly ? Number(day.day.slice(5, 7)) : index + 1}</text>
       </g>)}
-      <line x1={left} x2={left} y1={top} y2={y(0)} stroke="#587580" />
-      <line x1={left} x2={width - right} y1={y(0)} y2={y(0)} stroke="#587580" />
-      {area && <polygon points={area} fill="url(#db-line-fill)" />}
-      {points && <polyline points={points} fill="none" stroke="#72ead0" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
-      {actual.map(day => day.count > 0 && <circle key={day.day} cx={x(day.index)} cy={y(day.count)} r="3" fill="#a4fff0" />)}
-      <text x={width - 1} y={height - 7} textAnchor="end" fill="#b4d5df" fontSize="14">日</text>
+      <line x1={left} x2={left} y1={top} y2={y(0)} stroke="#568fc2" />
+      <line x1={left} x2={width - right} y1={y(0)} y2={y(0)} stroke="#568fc2" />
+      {area && <polygon points={area} fill={`url(#${gradientId})`} />}
+      {points && <polyline points={points} fill="none" stroke={lineColor} strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" />}
+      {actual.map(day => day.count > 0 && <circle key={day.day} cx={x(day.index)} cy={y(day.count)} r={isMonthly ? 3.5 : 3} fill={lineColor} />)}
+      <text x={width - 1} y={height - 6} textAnchor="end" fill="#d0edff" fontSize={fontSize}>{isEnglish ? (isMonthly ? "Mo." : "Day") : (isMonthly ? "月" : "日")}</text>
       {hasHover && hoverIndex !== null && <g className="db-chart-tooltip" pointerEvents="none">
-        <line x1={x(hoverIndex)} x2={x(hoverIndex)} y1={top} y2={y(0)} stroke="#c9f7ee" strokeWidth="1.5" strokeDasharray="4 5" />
-        <circle cx={x(hoverIndex)} cy={y(hovered!.count!)} r="5" fill="#b0ffef" stroke="#0e2836" strokeWidth="2" />
-        <rect x={tooltipX} y={tooltipY} width="140" height="48" rx="7" fill="#153c4c" stroke="#69cdb8" />
-        <text x={tooltipX + 11} y={tooltipY + 19} fill="#ddf6f9" fontSize="13">{dates(hovered!.day)}</text>
-        <text x={tooltipX + 11} y={tooltipY + 38} fill="#86f2d6" fontSize="14" fontWeight="700">{hovered!.count} 人次</text>
+        <line x1={x(hoverIndex)} x2={x(hoverIndex)} y1={top} y2={y(0)} stroke="#ffffff" strokeWidth="1.5" strokeDasharray="4 5" />
+        <circle cx={x(hoverIndex)} cy={y(hovered!.count!)} r="5" fill={lineColor} stroke="#ffffff" strokeWidth="1.5" />
+        <rect x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight} rx="6" fill="#00162f" stroke={lineColor} />
+        <text x={tooltipX + 10} y={tooltipY + (isMonthly ? 16 : 19)} fill="#ffffff" fontSize="13">{dates(isMonthly ? hovered!.day.slice(0, 7) : hovered!.day)}</text>
+        <text x={tooltipX + 10} y={tooltipY + (isMonthly ? 33 : 38)} fill={lineColor} fontSize="14" fontWeight="700">{hovered!.count} {t("人次")}</text>
       </g>}
     </svg>
   </div>;
 }
 
 function AttendanceChart({ entries, colors }: { entries: Attendance[]; colors: Record<string, string> }) {
+  const { isEnglish, t } = useLanguage();
   const total = entries.reduce((sum, entry) => sum + entry.count, 0);
+  const displayName = (entry: Attendance) => entry.id === "staff" ? (isEnglish ? "Staff" : "幹部") : entry.id === "unassigned" ? t("未指定") : entry.name;
+  const countUnit = (count: number) => isEnglish ? (count === 1 ? "session" : "sessions") : "次";
+  const shade = (hex: string, amount: number) => "#" + [1, 3, 5].map(index => Math.round(parseInt(hex.slice(index, index + 2), 16) * amount).toString(16).padStart(2, "0")).join("");
   const activeEntries = entries.filter(entry => entry.count > 0);
+  const slices = activeEntries.map((entry, index) => {
+    const start = -Math.PI / 2 + activeEntries.slice(0, index).reduce((sum, previous) => sum + previous.count, 0) / total * Math.PI * 2;
+    const end = start + entry.count / total * Math.PI * 2;
+    return { entry, color: colors[entry.id] ?? "#91bfff", path: `M 120 68 L ${120 + 102 * Math.cos(start)} ${68 + 55 * Math.sin(start)} A 102 55 0 ${end - start > Math.PI ? 1 : 0} 1 ${120 + 102 * Math.cos(end)} ${68 + 55 * Math.sin(end)} Z` };
+  });
+  const summary = entries.map(entry => displayName(entry) + " " + entry.count + " " + countUnit(entry.count)).join(", ");
   return <div className="db-attendance-body">
-    <svg className="db-attendance-pie" viewBox="0 0 200 200" role="img" aria-label={"本月板務出勤，共 " + total + " 次；" + entries.map(entry => entry.name + " " + entry.count + " 次").join("，")}>
-      {!total && <circle cx="100" cy="100" r="84" fill="#2c4655" />}
-      {activeEntries.map((entry, index) => {
-        const start = -Math.PI / 2 + activeEntries.slice(0, index).reduce((sum, previous) => sum + previous.count, 0) / total * Math.PI * 2;
-        const end = start + entry.count / total * Math.PI * 2;
-        const color = colors[entry.id] ?? "#99b6c6";
-        if (entry.count === total) return <circle key={entry.id} cx="100" cy="100" r="84" fill={color}><title>{entry.name}：{entry.count} 次</title></circle>;
-        const path = `M 100 100 L ${100 + 84 * Math.cos(start)} ${100 + 84 * Math.sin(start)} A 84 84 0 ${end - start > Math.PI ? 1 : 0} 1 ${100 + 84 * Math.cos(end)} ${100 + 84 * Math.sin(end)} Z`;
-        return <path key={entry.id} d={path} fill={color} stroke="#102635" strokeWidth="2"><title>{entry.name}：{entry.count} 次（{Math.round(entry.count / total * 100)}%）</title></path>;
+    <svg className="db-attendance-pie" viewBox="0 0 240 160" role="img" aria-label={(isEnglish ? `Attendance this month: ${total} sessions. ` : `本月板務出勤，共 ${total} 次；`) + summary}>
+      <defs><filter id="db-pie-shadow" x="-30%" y="-50%" width="160%" height="220%"><feGaussianBlur stdDeviation="5" /></filter></defs>
+      <ellipse cx="120" cy="95" rx="102" ry="52" fill="#000000" opacity=".8" filter="url(#db-pie-shadow)" />
+      {!total && <ellipse cx="120" cy="76" rx="102" ry="55" fill="#163b6b" />}
+      {Array.from({ length: 15 }, (_, index) => 15 - index).map(depth => <g key={depth} transform={`translate(0 ${depth})`}>
+        {slices.map(({ entry, color, path }) => entry.count === total
+          ? <ellipse key={entry.id} cx="120" cy="68" rx="102" ry="55" fill={shade(color, .5 + (15 - depth) * .014)} />
+          : <path key={entry.id} d={path} fill={shade(color, .5 + (15 - depth) * .014)} />)}
+      </g>)}
+      {slices.map(({ entry, color, path }) => {
+        const title = displayName(entry) + ": " + entry.count + " " + countUnit(entry.count) + " (" + Math.round(entry.count / total * 100) + "%)";
+        return entry.count === total
+          ? <ellipse key={entry.id} cx="120" cy="68" rx="102" ry="55" fill={color} stroke="#00101f" strokeWidth="1.5"><title>{title}</title></ellipse>
+          : <path key={entry.id} d={path} fill={color} stroke="#00101f" strokeWidth="1.5"><title>{title}</title></path>;
       })}
     </svg>
-    <ul className="db-attendance-legend">{entries.map(entry => <li key={entry.id}><span><i style={{ background: colors[entry.id] ?? "#99b6c6" }} /><span translate="no">{entry.name}</span></span><strong>{entry.count}<small>次</small></strong></li>)}</ul>
+    <ul className="db-attendance-legend">{entries.map(entry => <li key={entry.id}><span><i style={{ background: colors[entry.id] ?? "#91bfff" }} /><span translate="no">{displayName(entry)}</span></span><strong>{entry.count}<small>{isEnglish ? "×" : "次"}</small></strong></li>)}</ul>
   </div>;
 }
 
 function Panel({ title, children, className = "", actions }: { title: string; children: React.ReactNode; className?: string; actions?: React.ReactNode }) {
-  return <section className={"db-panel " + className}><div className="db-panel-heading"><h2>{title}</h2>{actions ?? <span className="db-panel-dot" />}</div>{children}</section>;
+  const { t } = useLanguage();
+  return <section className={"db-panel " + className}><div className="db-panel-heading"><h2>{t(title)}</h2>{actions ?? <span className="db-panel-dot" />}</div>{children}</section>;
 }
 
 export default function DashboardPage() {
+  const { isEnglish, t } = useLanguage();
   const { user, profile, isLoading, statusMessage, handleGoogleLogin, handleLogout } = useAuthProfile();
   const allowed = canViewOperationsDashboard(profile);
   const [month, setMonth] = useState(() => getTaipeiDate().slice(0, 7));
@@ -248,15 +277,16 @@ export default function DashboardPage() {
   const remaining = Math.max(0, capacity - occupied);
   const currentMonth = getTaipeiDate().slice(0, 7);
   const boardTone = Math.max(0, Math.min(4, Math.ceil(occupied / 4) - 1));
-  const empty = <p className="db-empty">目前沒有資料</p>;
+  const empty = <p className="db-empty">{t("目前沒有資料")}</p>;
   const formatMonth = useMemo(() => month.replace("-", " / "), [month]);
 
   const collectors = useMemo(() => [...(data?.collectors ?? [])].sort((a, b) => Number(b.role === "board_manager") - Number(a.role === "board_manager") || b.amount - a.amount || a.name.localeCompare(b.name, "zh-TW")), [data]);
   const attendanceColors = useMemo(() => {
-    const colors: Record<string, string> = { staff: "#bc9dfb", unassigned: "#99b6c6" };
+    const colors: Record<string, string> = { staff: "#bb32ff", unassigned: "#91bfff" };
     collectors.filter(collector => collector.role === "board_manager").forEach((collector, index) => { if (collector.id) colors[collector.id] = swatches[index % 5]; });
     return colors;
   }, [collectors]);
+  const collectorName = (collector: Collector) => collector.id === null ? t("未記錄收款人") : collector.name === "未填姓名" ? t("未填姓名") : collector.name;
   const attendanceTotal = (data?.attendance ?? []).reduce((sum, entry) => sum + entry.count, 0);
   const switchStorageTab = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -269,73 +299,69 @@ export default function DashboardPage() {
   return (
     <main className="db-shell">
       <Navbar user={user} profile={profile} isLoading={isLoading} onLogin={handleGoogleLogin} onLogout={handleLogout} />
-      <div className="db-page"><div className="db-content">
-        {isLoading ? <p className="db-access">正在確認登入身分…</p>
-        : !user ? <p className="db-access">請登入後查看營運儀錶板。</p>
-        : !allowed ? <p className="db-access">此頁僅供幹部與管理員查看。</p>
+      <div className="db-page" data-i18n-ignore><div className="db-content">
+        {isLoading ? <p className="db-access">{t("正在確認登入身分…")}</p>
+        : !user ? <p className="db-access">{t("請登入後查看營運儀錶板。")}</p>
+        : !allowed ? <p className="db-access">{t("此頁僅供幹部與管理員查看。")}</p>
         : <>
-          {statusMessage && <p className="db-alert" role="alert">{statusMessage}</p>}
-          {error && <p className="db-alert" role="alert">{error}</p>}
-          {notice && <p className="db-success" role="status">{notice}</p>}
-          <div className="db-toolbar" role="group" aria-label="月份與資料更新">
-            <div className="db-month"><button aria-label="上個月" type="button" disabled={busy} onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatMonth}</strong><button aria-label="下個月" type="button" disabled={busy || month >= currentMonth} onClick={() => changeMonth(1)}><ChevronRight size={18} /></button></div>
-            <button className="db-refresh" type="button" aria-label="更新資料" title="更新資料" disabled={busy || actionBusy} onClick={() => void reload(month)}><RefreshCw size={16} className={busy ? "db-spin" : ""} /><span>更新</span></button>
-          </div>
+          {statusMessage && <p className="db-alert" role="alert">{t(statusMessage)}</p>}
+          {error && <p className="db-alert" role="alert">{t(error)}</p>}
+          {notice && <p className="db-success" role="status">{t(notice)}</p>}
           <div className="db-workspace">
-            {!data ? <Panel title="租板資料">{busy ? <p className="db-empty">正在載入…</p> : empty}</Panel> : <>
+            {!data ? <Panel title={t("租板資料")}>{busy ? <p className="db-empty">{t("正在載入…")}</p> : empty}</Panel> : <>
               <div className="db-rent-grid" aria-busy={busy}>
-                <Panel title="租板累積收入" className="db-income-panel"><SemicircleGauge value={data.income} step={2000} unit="元" label="租板累積已收款" /></Panel>
-                <Panel title="每日租板人次" className="db-daily-panel" actions={<span className="db-chart-total">{data.monthly.total}<small>人次</small></span>}><TrendChart days={data.daily} month={data.month} /></Panel>
-                <section className="db-panel db-collector-panel" aria-label="各人員收款">
-                  <button className="db-carousel-edge" type="button" aria-label="向左查看收款人員" onClick={() => collectorsRef.current?.scrollBy({ left: -420, behavior: "smooth" })}><ChevronLeft size={18} /></button>
-                  <div className="db-collector-grid" ref={collectorsRef} tabIndex={0} role="region" aria-label="收款人員，板務在前，可左右捲動">
-                    {collectors.length ? collectors.map((collector, index) => <div className="db-collector" key={collector.id ?? "unknown"} title={collector.name + "：" + currency(collector.amount)}>
-                      <Ring value={collector.amount} total={data.income} label={collector.name} tone={index} compact />
-                      <div className="db-collector-info"><span translate="no">{collector.name}</span><strong style={{ color: swatches[index % 5] }}>{currency(collector.amount)}</strong></div>
+                <Panel title={t("租板累積收入")} className="db-income-panel"><SemicircleGauge value={data.income} step={2000} unit="元" label={t("租板累積已收款")} /></Panel>
+                <Panel title={t("每日租板人次")} className="db-daily-panel" actions={<div className="db-daily-actions"><div className="db-month"><button aria-label={t("上個月")} type="button" disabled={busy} onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatMonth}</strong><button aria-label={t("下個月")} type="button" disabled={busy || month >= currentMonth} onClick={() => changeMonth(1)}><ChevronRight size={18} /></button></div><span className="db-chart-total">{data.monthly.total}<small>{t("人次")}</small></span></div>}><TrendChart days={data.daily} month={data.month} /></Panel>
+                <section className="db-panel db-collector-panel" aria-label={t("各人員收款")}>
+                  <button className="db-carousel-edge" type="button" aria-label={t("向左查看收款人員")} onClick={() => collectorsRef.current?.scrollBy({ left: -420, behavior: "smooth" })}><ChevronLeft size={18} /></button>
+                  <div className="db-collector-grid" ref={collectorsRef} tabIndex={0} role="region" aria-label={t("收款人員，板務在前，可左右捲動")}>
+                    {collectors.length ? collectors.map((collector, index) => <div className="db-collector" key={collector.id ?? "unknown"} title={collectorName(collector) + ": " + currency(collector.amount)}>
+                      <Ring value={collector.amount} total={data.income} label={collectorName(collector)} tone={index} compact />
+                      <div className="db-collector-info"><span translate="no">{collectorName(collector)}</span><strong style={{ color: swatches[index % 5] }}>{currency(collector.amount)}</strong></div>
                     </div>) : empty}
                   </div>
-                  <button className="db-carousel-edge" type="button" aria-label="向右查看收款人員" onClick={() => collectorsRef.current?.scrollBy({ left: 420, behavior: "smooth" })}><ChevronRight size={18} /></button>
+                  <button className="db-carousel-edge" type="button" aria-label={t("向右查看收款人員")} onClick={() => collectorsRef.current?.scrollBy({ left: 420, behavior: "smooth" })}><ChevronRight size={18} /></button>
                 </section>
-                <Panel title="板務出勤次數" className="db-attendance-panel" actions={<span className="db-attendance-total">{attendanceTotal}<small>次</small></span>}><AttendanceChart entries={data.attendance ?? []} colors={attendanceColors} /></Panel>
+                <div className="db-right-column"><section className="db-panel db-academic-panel" aria-label={t("學年度各月租板人次")}><TrendChart days={[]} month={data.month} monthly={data.academic_months ?? []} /></section><Panel title={t("板務出勤次數")} className="db-attendance-panel" actions={<span className="db-attendance-total">{attendanceTotal}<small>{isEnglish ? "sessions" : "次"}</small></span>}><AttendanceChart entries={data.attendance ?? []} colors={attendanceColors} /></Panel></div>
               </div>
               <div className="db-storage-grid">
-                <Panel title="板位使用狀況" className="db-storage-overview">
-                  <SemicircleGauge value={occupied} step={4} unit="人" label="板位租用人數" />
-                  <p className="db-capacity-note">目前容量 {capacity} 格 · 使用率 {capacity ? Math.round(occupied / capacity * 100) : 0}%</p>
+                <Panel title={t("板位使用狀況")} className="db-storage-overview">
+                  <SemicircleGauge value={occupied} step={4} unit="人" label={t("板位租用人數")} />
+                  <p className="db-capacity-note">{isEnglish ? `Capacity ${capacity} spaces · Utilization ${capacity ? Math.round(occupied / capacity * 100) : 0}%` : `目前容量 ${capacity} 格 · 使用率 ${capacity ? Math.round(occupied / capacity * 100) : 0}%`}</p>
                 </Panel>
-                <section className="db-panel db-control-panel" aria-label="已租出與剩餘板位">
+                <section className="db-panel db-control-panel" aria-label={t("已租出與剩餘板位")}>
                   <div className="db-capacity-row">
-                    <div className="db-capacity-ring"><span>已租出板位</span><Ring value={occupied} total={capacity} label="已租出板位" tone={boardTone} large compact /></div>
-                    <div className="db-capacity-value"><strong>{occupied}<small>人</small></strong></div>
+                    <div className="db-capacity-ring"><span>{t("已租出板位")}</span><Ring value={occupied} total={capacity} label={t("已租出板位")} tone={boardTone} large compact /></div>
+                    <div className="db-capacity-value"><strong>{occupied}<small>{t("人")}</small></strong></div>
                   </div>
                   <div className="db-capacity-row">
-                    <div className="db-capacity-ring"><span>剩餘板位</span><Ring value={remaining} total={capacity} label="剩餘板位" tone={1} large compact /></div>
-                    <div className="db-capacity-value"><strong>{remaining}<small>格</small></strong>
+                    <div className="db-capacity-ring"><span>{t("剩餘板位")}</span><Ring value={remaining} total={capacity} label={t("剩餘板位")} tone={1} large compact /></div>
+                    <div className="db-capacity-value"><strong>{remaining}<small>{t("格")}</small></strong>
                       <div className="db-control-actions">
-                        <button type="button" aria-label="減少一格總板位" disabled={actionBusy || remaining === 0} onClick={() => void mutate({ action: "capacity", delta: -1 }, "已減少一格板位。")}><Minus size={17} /></button>
-                        <button type="button" aria-label="增加一格總板位" disabled={actionBusy || capacity >= 10000} onClick={() => void mutate({ action: "capacity", delta: 1 }, "已增加一格板位。")}><Plus size={17} /></button>
+                        <button type="button" aria-label={t("減少一格總板位")} disabled={actionBusy || remaining === 0} onClick={() => void mutate({ action: "capacity", delta: -1 }, "已減少一格板位。")}><Minus size={17} /></button>
+                        <button type="button" aria-label={t("增加一格總板位")} disabled={actionBusy || capacity >= 10000} onClick={() => void mutate({ action: "capacity", delta: 1 }, "已增加一格板位。")}><Plus size={17} /></button>
                       </div>
                     </div>
                   </div>
                 </section>
-                <section className="db-panel db-storage-tabs" aria-label="板位資訊">
-                  <div className="db-storage-tab-list" role="tablist" aria-label="板位管理功能">
+                <section className="db-panel db-storage-tabs" aria-label={t("板位資訊")}>
+                  <div className="db-storage-tab-list" role="tablist" aria-label={t("板位管理功能")}>
                     {storageTabs.map((tab, index) => <button key={tab.id} type="button" role="tab" id={"db-tab-" + tab.id} aria-controls={"db-panel-" + tab.id} aria-selected={storageTab === tab.id} tabIndex={storageTab === tab.id ? 0 : -1} onKeyDown={event => switchStorageTab(event, index)} onClick={() => setStorageTab(tab.id)}>
-                      {tab.label}{tab.id !== "add" && <span className="db-count">{tab.id === "list" ? occupied : unpaidLeases.length}</span>}
+                      {t(tab.label)}{tab.id !== "add" && <span className="db-count">{tab.id === "list" ? occupied : unpaidLeases.length}</span>}
                     </button>)}
                   </div>
                   <div className="db-storage-tab-body" role="tabpanel" id={"db-panel-" + storageTab} aria-labelledby={"db-tab-" + storageTab} tabIndex={0}>
                     {storageTab === "add" && <form onSubmit={event => void addLease(event)}>
-                      <div className="db-choice"><label><input type="radio" checked={renterType === "member"} onChange={() => { setRenterType("member"); setGuestName(""); }} /> 社員</label><label><input type="radio" checked={renterType === "guest"} onChange={() => { setRenterType("guest"); setSelected(null); setSearch(""); setMatches([]); }} /> 非社員</label></div>
-                      {renterType === "member" ? <div className="db-search"><label htmlFor="db-member-search">搜尋社員姓名</label><div className="db-input-icon"><Search size={16} /><input id="db-member-search" value={search} onChange={event => { setSearch(event.target.value); setSelected(null); }} placeholder="輸入姓名，從結果選擇" autoComplete="off" /></div>
-                        {selected ? <p className="db-selected">已選取：{selected.full_name} {selected.student_id && "· " + selected.student_id}</p> : search.trim() && <div className="db-results" role="listbox" aria-label="社員搜尋結果">{matches.length ? matches.map(member => <button type="button" role="option" aria-selected={false} key={member.id} onClick={() => { setSelected(member); setSearch(member.full_name); setMatches([]); }}>{member.full_name}<span>{member.student_id}</span></button>) : <p>沒有符合的社員</p>}</div>}</div>
-                      : <div className="db-search"><label htmlFor="db-guest-name">非社員姓名</label><input id="db-guest-name" value={guestName} maxLength={100} onChange={event => setGuestName(event.target.value)} placeholder="請填寫可辨識的姓名" required /></div>}
-                      <div className="db-search"><label htmlFor="db-start-date">起租日期</label><input id="db-start-date" type="date" max={getTaipeiDate()} value={startOn} onChange={event => setStartOn(event.target.value)} required /></div>
-                      <button className="db-primary-button" type="submit" disabled={actionBusy || remaining === 0}><Plus size={17} />新增板位租用</button>
-                      {remaining === 0 && <p className="db-note">板位已滿，請先增加總板位。</p>}
+                      <div className="db-choice"><label><input type="radio" checked={renterType === "member"} onChange={() => { setRenterType("member"); setGuestName(""); }} />{" "}{t("社員")}</label><label><input type="radio" checked={renterType === "guest"} onChange={() => { setRenterType("guest"); setSelected(null); setSearch(""); setMatches([]); }} />{" "}{t("非社員")}</label></div>
+                      {renterType === "member" ? <div className="db-search"><label htmlFor="db-member-search">{t("搜尋社員姓名")}</label><div className="db-input-icon"><Search size={16} /><input id="db-member-search" value={search} onChange={event => { setSearch(event.target.value); setSelected(null); }} placeholder={t("輸入姓名，從結果選擇")} autoComplete="off" /></div>
+                        {selected ? <p className="db-selected">{t("已選取：")}{selected.full_name} {selected.student_id && "· " + selected.student_id}</p> : search.trim() && <div className="db-results" role="listbox" aria-label={t("社員搜尋結果")}>{matches.length ? matches.map(member => <button type="button" role="option" aria-selected={false} key={member.id} onClick={() => { setSelected(member); setSearch(member.full_name); setMatches([]); }}>{member.full_name}<span>{member.student_id}</span></button>) : <p>{t("沒有符合的社員")}</p>}</div>}</div>
+                      : <div className="db-search"><label htmlFor="db-guest-name">{t("非社員姓名")}</label><input id="db-guest-name" value={guestName} maxLength={100} onChange={event => setGuestName(event.target.value)} placeholder={t("請填寫可辨識的姓名")} required /></div>}
+                      <div className="db-search"><label htmlFor="db-start-date">{t("起租日期")}</label><input id="db-start-date" type="date" max={getTaipeiDate()} value={startOn} onChange={event => setStartOn(event.target.value)} required /></div>
+                      <button className="db-primary-button" type="submit" disabled={actionBusy || remaining === 0}><Plus size={17} />{t("新增板位租用")}</button>
+                      {remaining === 0 && <p className="db-note">{t("板位已滿，請先增加總板位。")}</p>}
                     </form>}
-                    {storageTab === "list" && (activeLeases.length ? <ul className="db-list">{activeLeases.map(lease => <li key={lease.id}><div><strong>{lease.name}</strong><small>{lease.type === "member" ? "社員" : "非社員"} · {dates(lease.start_on)} — {dates(lease.end_on)}{lease.end_on <= data.today ? " · 已到期" : ""}</small></div><div className="db-lease-actions"><span className={lease.is_paid ? "db-paid" : "db-unpaid"}>{lease.is_paid ? "已繳" : "未繳"}</span><button type="button" className="db-danger-button" disabled={actionBusy} onClick={() => { if (window.confirm("確認為 " + lease.name + " 辦理退租？紀錄會保留。")) void mutate({ action: "end", target_id: lease.id }, "已辦理退租。"); }}>退租</button></div></li>)}</ul> : empty)}
-                    {storageTab === "unpaid" && (unpaidLeases.length ? <ul className="db-list">{unpaidLeases.map(lease => <li key={lease.id}><div><strong>{lease.name}</strong><small>{lease.type === "member" ? "社員" : "非社員"} · {dates(lease.start_on)}{lease.ended_at ? " · 已退租" : ""}</small></div><label className="db-check"><input type="checkbox" disabled={actionBusy} checked={false} onChange={() => void mutate({ action: "payment", target_id: lease.id, paid: true }, "已標記繳費。")} /><span>已繳費</span></label></li>)}</ul> : <p className="db-empty">目前沒有未繳費紀錄。</p>)}
+                    {storageTab === "list" && (activeLeases.length ? <ul className="db-list">{activeLeases.map(lease => <li key={lease.id}><div><strong translate="no">{lease.name}</strong><small>{lease.type === "member" ? t("社員") : t("非社員")} · {dates(lease.start_on)} — {dates(lease.end_on)}{lease.end_on <= data.today ? " · " + t("已到期") : ""}</small></div><div className="db-lease-actions"><span className={lease.is_paid ? "db-paid" : "db-unpaid"}>{lease.is_paid ? t("已繳") : t("未繳")}</span><button type="button" className="db-danger-button" disabled={actionBusy} onClick={() => { if (window.confirm(isEnglish ? "End the storage lease for " + lease.name + "? The record will be retained." : "確認為 " + lease.name + " 辦理退租？紀錄會保留。")) void mutate({ action: "end", target_id: lease.id }, "已辦理退租。"); }}>{t("退租")}</button></div></li>)}</ul> : empty)}
+                    {storageTab === "unpaid" && (unpaidLeases.length ? <ul className="db-list">{unpaidLeases.map(lease => <li key={lease.id}><div><strong translate="no">{lease.name}</strong><small>{lease.type === "member" ? t("社員") : t("非社員")} · {dates(lease.start_on)}{lease.ended_at ? " · " + t("已退租") : ""}</small></div><label className="db-check"><input type="checkbox" disabled={actionBusy} checked={false} onChange={() => void mutate({ action: "payment", target_id: lease.id, paid: true }, "已標記繳費。")} /><span>{t("已繳費")}</span></label></li>)}</ul> : <p className="db-empty">{t("目前沒有未繳費紀錄。")}</p>)}
                   </div>
                 </section>
               </div>
