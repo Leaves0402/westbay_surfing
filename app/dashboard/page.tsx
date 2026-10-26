@@ -28,13 +28,15 @@ type Dashboard = {
 };
 type MemberResult = { id: string; full_name: string; student_id: string | null };
 const swatches = ["#00c8ff", "#69d7c1", "#fff500", "#ff7900", "#ff123f"];
-const attendanceSwatches = ["#548fae", "#73a795", "#c6b46f", "#bf8b68", "#b77f8c"];
+const attendanceSwatches = ["#24b8e6", "#43d9aa", "#f0d85d", "#ed9a57", "#e9759f"];
+const gaugeSwatches = ["#00dcff", "#19ff67", "#fff900", "#ff8a00", "#ff1744"];
 const currency = (value: number) => "NT$ " + Math.round(value).toLocaleString("zh-TW");
 const dates = (value: string) => value.replaceAll("-", "/");
 
 function SemicircleGauge({ value, step, unit, label }: { value: number; step: number; unit: string; label: string }) {
   const { isEnglish, t } = useLanguage();
   const limit = step * 5;
+  const activeColor = gaugeSwatches[Math.max(0, Math.min(4, Math.ceil(value / step) - 1))];
   const fraction = Math.max(0, Math.min(1, value / limit));
   const position = (fraction: number, radius: number) => ({
     x: 200 - radius * Math.cos(fraction * Math.PI),
@@ -46,22 +48,21 @@ function SemicircleGauge({ value, step, unit, label }: { value: number; step: nu
   };
   return <div className="db-semicircle-gauge">
     <svg viewBox="0 -20 400 250" role="img" aria-label={isEnglish ? `${t(label)}: ${value.toLocaleString("en-US")} ${t(unit)}. Each color represents ${step}; scale maximum ${limit}.` : `${label} ${value.toLocaleString("zh-TW")} ${unit}，每 ${step.toLocaleString("zh-TW")} ${unit}一色，刻度上限 ${limit.toLocaleString("zh-TW")} ${unit}`}>
-      <path d={arc(0, 1)} fill="none" stroke="#294451" strokeWidth="16" />
-      {swatches.map((color, i) => <path key={color} d={arc(i / 5 + .003, (i + 1) / 5 - .003)} fill="none" stroke={color} strokeWidth="12" />)}
+      {gaugeSwatches.map((color, i) => <path className="db-gauge-band" key={color} d={arc(i / 5, (i + 1) / 5)} fill="none" stroke={color} strokeWidth="12" style={{ color }} />)}
       {Array.from({ length: 21 }, (_, i) => {
         const major = i % 4 === 0, a = position(i / 20, 162), b = position(i / 20, major ? 177 : 170);
         const tickLabel = position(i / 20, 195);
         const endpoint = i === 0 || i === 20;
         return <g key={i}>
-          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={major ? "#d0e7ee" : "#64848f"} strokeWidth={major ? 2 : 1} />
-          {major && <text x={endpoint ? (i === 0 ? 14 : 386) : tickLabel.x} y={endpoint ? 218 : tickLabel.y + 6} textAnchor={endpoint ? (i === 0 ? "start" : "end") : "middle"} fill="#bdd8e1" fontSize="18">{(i * step / 4).toLocaleString("zh-TW")}</text>}
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={major ? "#ffffff" : "#39ff14"} strokeWidth={major ? 2 : 1} />
+          {major && <text x={endpoint ? (i === 0 ? 14 : 386) : tickLabel.x} y={endpoint ? 218 : tickLabel.y + 6} textAnchor={endpoint ? (i === 0 ? "start" : "end") : "middle"} fill="#ffffff" fontSize="18">{(i * step / 4).toLocaleString("zh-TW")}</text>}
         </g>;
       })}
       <g transform={`rotate(${fraction * 180} 200 190)`} className="db-needle"><path d="M 76 190 L 200 184 L 211 190 L 200 196 Z" fill="#e1f5fb" /></g>
       <circle cx="200" cy="190" r="9" fill="#d4e9f0" stroke="#7b9eab" strokeWidth="3" />
       <circle cx="200" cy="190" r="3" fill="#456776" />
     </svg>
-    <div className="db-gauge-total"><strong>{value.toLocaleString("zh-TW")}</strong><span>{t(unit)}</span></div>
+    <div className="db-gauge-total"><strong style={{ color: activeColor }}>{value.toLocaleString("zh-TW")}</strong><span>{t(unit)}</span></div>
   </div>;
 }
 
@@ -74,7 +75,7 @@ function Ring({ value, total, label, tone = 0, large = false, compact = false, s
       <div className="db-ring" style={{ "--ring-color": swatches[tone % 5], "--ring-percent": String(percent) + "%" } as React.CSSProperties}
         role="img" aria-label={t(label) + " " + percent + "%"}>
         <div>{showBoard ? <svg className="db-surfboard-icon" viewBox="0 0 40 64" aria-hidden="true" focusable="false">
-          <path d="M20 3C11 3 8 20 8 35c0 10 3 19 8 26h8c5-7 8-16 8-26C32 20 29 3 20 3Z" fill="#69d7c1" fillOpacity=".14" stroke="currentColor" strokeWidth="2.5" />
+          <path d="M20 2C13 12 8 25 9 39c.6 10 3.5 17 7 22h8c3.5-5 6.4-12 7-22C32 25 27 12 20 2Z" fill="#69d7c1" fillOpacity=".14" stroke="currentColor" strokeWidth="2.5" />
           <path d="M20 7v49" stroke="currentColor" strokeWidth="1.5" opacity=".7" />
           <path d="m20 43 8 9-8-3" fill="currentColor" opacity=".75" />
         </svg> : <strong>{percent}%</strong>}{!compact && <small>{value.toLocaleString("zh-TW")} / {total.toLocaleString("zh-TW")}</small>}</div>
@@ -190,8 +191,8 @@ function AttendanceChart({ entries, colors }: { entries: Attendance[]; colors: R
       {!total && <ellipse cx="120" cy="76" rx="102" ry="55" fill="#163b6b" />}
       {Array.from({ length: 15 }, (_, index) => 15 - index).map(depth => <g key={depth} transform={`translate(0 ${depth})`}>
         {slices.map(({ entry, color, path }) => entry.count === total
-          ? <ellipse key={entry.id} cx="120" cy="68" rx="102" ry="55" fill={shade(color, .5 + (15 - depth) * .014)} />
-          : <path key={entry.id} d={path} fill={shade(color, .5 + (15 - depth) * .014)} />)}
+          ? <ellipse key={entry.id} cx="120" cy="68" rx="102" ry="55" fill={shade(color, .62 + (15 - depth) * .014)} />
+          : <path key={entry.id} d={path} fill={shade(color, .62 + (15 - depth) * .014)} />)}
       </g>)}
       {slices.map(({ entry, color, path }) => {
         const title = displayName(entry) + ": " + entry.count + " " + countUnit(entry.count) + " (" + Math.round(entry.count / total * 100) + "%)";

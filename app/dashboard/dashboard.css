@@ -198,3 +198,6 @@
 }
 
 .db-surfboard-icon { display: block; width: 30px; height: 48px; color: #9cdac9; transform: rotate(22deg); }
+
+.db-gauge-band { filter: drop-shadow(0 0 1.5px currentColor); }
+.db-gauge-total strong { text-shadow: 0 0 12px color-mix(in srgb, currentColor 25%, transparent); }
