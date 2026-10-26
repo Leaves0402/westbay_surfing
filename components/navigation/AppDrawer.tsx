@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   BookOpen,
   CalendarCheck,
+  ChartNoAxesCombined,
   ClipboardList,
   Home,
   LogOut,
@@ -26,6 +27,7 @@ import {
   canViewAttendancePage,
   canViewLessons,
   canViewMaintenancePage,
+  canViewOperationsDashboard,
   canViewMembers,
   canViewSurfTrips,
 } from "@/lib/permissions";
@@ -151,6 +153,9 @@ export function AppDrawer({
         description: "教學與社員出席管理",
         icon: ClipboardList,
       });
+    }
+    if (canViewOperationsDashboard(profile)) {
+      staffLinks.push({ href: "/dashboard", label: "營運儀錶板", description: "租板收入與板位管理", icon: ChartNoAxesCombined });
     }
     if (canViewMaintenancePage(profile)) {
       staffLinks.push({

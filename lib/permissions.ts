@@ -141,6 +141,10 @@ export function canViewAttendancePage(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }
 
+export function canViewOperationsDashboard(input: RoleInput) {
+  return hasAtLeastRole(input, "officer");
+}
+
 export function canViewMaintenancePage(input: RoleInput) {
   return hasAtLeastRole(input, "officer");
 }
